@@ -17,7 +17,7 @@
    LAYOUT: barra esmeralda arriba, pestañas, una columna de tarjetas; tablas apiladas en móvil. */
 :root{color-scheme:light dark;--bg:light-dark(#fff,#141414);--ink:light-dark(#1a1a1a,#f2f2f2);--mut:light-dark(#5f5f5f,#b0b0b0);--em:#DA291C;--emd:light-dark(#b51f14,#ff6a5c);--pk:light-dark(#fde3e1,#4a1a16);--pki:light-dark(#9e1b12,#ffc9c4);--ln:light-dark(#e3e3e3,#333);--pn:light-dark(#f5f5f5,#1f1f1f);--ok:light-dark(#e3f3e8,#12331f);--oki:light-dark(#1b6b38,#8fdcaa);--am:light-dark(#fff1c9,#3d3210);--ami:light-dark(#6b5000,#ffe08a)}
 :root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
-*{box-sizing:border-box;min-width:0}
+*{box-sizing:border-box;min-width:0}[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Schibsted Grotesk",system-ui,sans-serif;overflow-x:clip}
 h1,h2,h3{margin:0;line-height:1.1;text-wrap:balance}
 h1{font-size:clamp(24px,5vw,34px);font-weight:800}h2{font-size:22px;font-weight:800}h3{font-size:17px;font-weight:700}
@@ -61,6 +61,7 @@ td input,td select{min-height:40px;padding:7px 9px}
 .cal .d.on{background:var(--em);color:#fff;border-color:var(--em)}
 .cal .d span{display:block;font-weight:800;font-size:11px;overflow-wrap:anywhere;line-height:1.1;margin-top:3px}
 .login{max-width:440px;margin:6vh auto 0}
+.days{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px}.day{border:2px solid var(--ln);background:var(--bg);color:var(--ink);border-radius:12px;padding:12px;text-align:left;cursor:pointer;font:inherit;min-height:44px}.day b{display:block;font-size:17px}.day b::first-letter{text-transform:uppercase}.day span{font-size:13px;color:var(--mut)}.day.on{border-color:var(--em);background:var(--pk)}.day.on span{color:var(--pki)}
 .logo{width:36px;height:36px;border-radius:8px;object-fit:contain;background:#fff;border:1px solid var(--ln);display:inline-grid;place-items:center;font-weight:800;font-size:13px;color:#DA291C;flex:none}.logo.lg{width:56px;height:56px;font-size:18px}
 .empty{padding:22px;text-align:center;color:var(--mut);border:1.5px dashed var(--ln);border-radius:14px}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:10px;font-weight:600;z-index:9;opacity:0;transition:opacity .2s;pointer-events:none}
@@ -92,7 +93,7 @@ const fm=(v,u)=>u==="mill"?"$"+num(v)+" M":num(v)+" und";
 const ub=(u,m)=>[u?num(u)+" und":"",m?"$"+num(m)+" M":""].filter(Boolean).join(" · ")||"—";
 const mU=m=>Number(m.und||0),mM=m=>Number(m.mill||0),hasM=m=>m&&(mU(m)>0||mM(m)>0);
 const fdate=s=>{if(!s)return"";const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d).toLocaleDateString("es-CO",{weekday:"short",day:"numeric",month:"short"})};
-const KEY="tyt-incentivos-v4";
+const KEY="tyt-incentivos-v5";
 
 function seed(){
   const metas=(vu,vm)=>Object.fromEntries(ALIADOS.map((a,i)=>[a,{und:vu?vu[i]||0:0,mill:vm?vm[i]||0:0,cat:["A","B","C"][i%3]}]));
@@ -107,12 +108,13 @@ function seed(){
       {id:5,marca:"TECNOLOGIA",tipo:"meta",estado:"aprobado",por:"César",d:{objU:900,objM:0,desde:"2026-12-01",hasta:"2026-12-31",metas:metas([90,70,40,60,80,40,70,30,70,60,60,30,50,60,90]),pagos:[{ref:"Portátiles gama media",ali:40000,staff:8000,ase:10000},{ref:"Smartwatch",ali:15000,staff:3000,ase:5000}],cond:"Línea de tecnología. Corte 31 dic."}},
       {id:6,marca:"MOTOROLA",tipo:"dia",estado:"pendiente",d:{fecha:"2026-12-11",titulo:"Moto Day",aliados:["COS BOGOTA","ATENTO BOGOTA","ARCOS BOGOTA"],pagos:[{ref:"moto g86",ali:15000,staff:4000,ase:8000}],cond:"Solo sedes Bogotá."}},
       ...[["SAMSUNG",7,60,"aprobado","César",1],["XIAOMI",8,450,"aprobado","Gina Bermúdez"],["HONOR",9,250,"aprobado","Gina Bermúdez"],["MOTOROLA",10,350,"aprobado","César"],["TCL",11,200,"pendiente"]].map(([m,id,b,e,por,u])=>({id,marca:m,tipo:"meta",estado:e,por,d:{objU:u?0:b*15,objM:u?b*15:0,desde:"2026-12-01",hasta:"2026-12-31",metas:(v=>u?metas(null,v):metas(v))(ALIADOS.map((_,i)=>Math.round(b*(0.5+((i*37+id)%10)/10)))),pagos:[{ref:"Gama alta",ali:60000,staff:12000,ase:12000},{ref:"Gama media",ali:40000,staff:8000,ase:8000},{ref:"Gama entrada",ali:20000,staff:4000,ase:5000}],cond:"Solo ventas efectivas en el informe oficial. Corte 31 dic."}}))
-    ],logos:{},next:12};
+      ,{id:12,marca:"SAMSUNG",tipo:"dia",estado:"aprobado",por:"Gina Bermúdez",d:{fecha:"2026-12-06",titulo:"Domingo Galaxy Tab",aliados:"todos",pagos:[{ref:"Galaxy Tab A9+",ali:15000,staff:4000,ase:8000},{ref:"Galaxy Watch8",ali:10000,staff:2000,ase:5000}],cond:"Concurso distinto al del sábado. Aplica solo a ventas del 6 de diciembre."}}
+    ],logos:{},next:13};
 }
 let db;try{db=JSON.parse(localStorage.getItem(KEY))}catch(e){}
 if(!db||!db.items)db=seed();db.logos=db.logos||{};
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}};
-const S={user:null,tab:null,lin:"Todas",rej:null};
+const S={user:null,tab:null,lin:"Todas",rej:null,dia:null};
 const app=document.getElementById("app");
 const toast=t=>{const e=document.getElementById("toast");e.textContent=t;e.classList.add("on");clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove("on"),2200)};
 
@@ -162,14 +164,18 @@ function brandForm(){
   const m=S.user.name;
   if(S.tab==="meta")return`<form class="card pn" id="f"><h2>Nueva meta volante</h2><p class="mut">Formato único de diciembre: objetivo, meta y categoría por aliado, pagos y condiciones.</p><div class="grid"><div><label for="obju">Objetivo total en unidades</label><input id="obju" type="number" inputmode="numeric" min="0" placeholder="0"></div><div><label for="objm">Objetivo total en millones</label><input id="objm" type="number" inputmode="decimal" step="any" min="0" placeholder="0"></div><div><label for="d1">Desde</label><input id="d1" type="date" value="2026-12-01" required></div><div><label for="d2">Hasta</label><input id="d2" type="date" value="2026-12-31" required></div></div><h3 style="margin:18px 0 8px">Meta por aliado</h3><table class="stack"><thead><tr><th>Aliado</th><th>Unidades</th><th>Millones</th><th>Categoría</th></tr></thead><tbody>${ALIADOS.map((a,i)=>`<tr><td>${esc(a)}</td><td><input type="number" inputmode="numeric" min="0" data-u="${i}" placeholder="0"></td><td><input type="number" inputmode="decimal" step="any" min="0" data-m="${i}" placeholder="0"></td><td><select data-cat="${i}"><option>A</option><option>B</option><option>C</option></select></td></tr>`).join("")}</tbody></table><p class="note">Llena unidades, millones o las dos, según la meta de la marca. Millones en millones de pesos (ej.: 85,5 = $85.500.000). Un aliado sin unidades ni millones no verá esta meta volante.</p>${payEditor()}<label for="cond" style="margin-top:16px">Condiciones (corte, fecha de pago, con o sin IVA)</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar a aprobación</button></form>`;
   if(S.tab==="dia"){const days=Object.entries(db.cal).filter(([,b])=>b===m).map(([k])=>k).sort();
-    if(!days.length)return`<div class="empty">TYT todavía no te ha asignado días de marca en diciembre.</div>`;
-    return`<form class="card pn" id="f"><h2>Incentivo para día de marca</h2><p class="mut">Tus días asignados por TYT: ${days.map(fdate).join(", ")}.</p><div class="grid"><div><label for="fecha">Día</label><select id="fecha">${days.map(k=>`<option value="${k}">${fdate(k)}</option>`).join("")}</select></div><div><label for="tit">Nombre de la actividad</label><input id="tit" required placeholder="Ej.: ${nom(m)} Day"></div></div>${aliPick()}${payEditor()}<label for="cond" style="margin-top:16px">Condiciones</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar a aprobación</button></form>`}
+    if(!days.length)return`<div class="empty">TYT todavía no te ha asignado días de marca en diciembre. Cuando el jefe de canal te asigne días, aparecerán aquí.</div>`;
+    if(!days.includes(S.dia))S.dia=days[0];
+    const st=k=>{const l=db.items.filter(i=>i.marca===m&&i.tipo==="dia"&&i.d.fecha===k);if(!l.length)return"Sin concurso";const c=e=>l.filter(i=>i.estado===e).length;return[c("aprobado")&&c("aprobado")+" aprobado",c("pendiente")&&c("pendiente")+" pendiente",c("rechazado")&&c("rechazado")+" rechazado"].filter(Boolean).join(" · ")};
+    return`<div class="card"><h2>Tus días de marca</h2><p class="mut">Elige el día y monta un concurso distinto para cada uno.</p><div class="days">${days.map(k=>`<button type="button" class="day${S.dia===k?" on":""}" data-day="${k}"><b>${fdate(k)}</b><span>${st(k)}</span></button>`).join("")}</div></div><form class="card pn" id="f"><h2>Concurso del ${fdate(S.dia)}</h2><p class="mut">Este concurso aplica solo para ese día.</p><input type="hidden" id="fecha" value="${S.dia}"><label for="tit">Nombre del concurso</label><input id="tit" required placeholder="Ej.: ${nom(m)} Day">${aliPick()}${payEditor()}<label for="cond" style="margin-top:16px">Condiciones</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar concurso del ${fdate(S.dia)} a aprobación</button></form>`}
   return`<form class="card pn" id="f"><h2>Nueva oferta específica</h2><p class="mut">Incentivos puntuales, como “hoy pagamos $25.000 por esta referencia”.</p><div class="grid"><div style="grid-column:1/-1"><label for="tit">Título de la oferta</label><input id="tit" required></div><div><label for="d1">Desde</label><input id="d1" type="date" required></div><div><label for="d2">Hasta</label><input id="d2" type="date" required></div></div>${aliPick()}${payEditor()}<label for="cond" style="margin-top:16px">Condiciones</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar a aprobación</button></form>`;
 }
 function viewBrand(){
-  const mine=db.items.filter(i=>i.marca===S.user.name&&i.tipo===S.tab).sort((a,b)=>b.id-a.id);
+  if(!["meta","dia","oferta"].includes(S.tab))S.tab="meta";
+  if(S.tab==="dia"){const ds=Object.entries(db.cal).filter(([,b])=>b===S.user.name).map(([k])=>k).sort();if(!ds.includes(S.dia))S.dia=ds[0]||null}
+  const mine=db.items.filter(i=>i.marca===S.user.name&&i.tipo===S.tab&&(S.tab!=="dia"||i.d.fecha===S.dia)).sort((a,b)=>b.id-a.id);
   const lg=`<div class="card row" style="justify-content:space-between"><div class="row">${logo(S.user.name,1)}<div><h3>${nom(S.user.name)}</h3><span class="mut">${db.logos[S.user.name]?"Este logo lo ven los jefes y los aliados.":"Sube el logo de tu marca (PNG o JPG)."}</span></div></div><label class="btn sec sm" style="margin:0;color:var(--ink)">${db.logos[S.user.name]?"Cambiar logo":"Subir logo"}<input type="file" id="logoin" accept="image/*" hidden></label></div>`;
-  return lg+tabs([["meta","Meta volante"],["dia","Días de marca"],["oferta","Ofertas"]])+brandForm()+`<h2 style="margin:22px 0 10px">Mis envíos</h2>`+(mine.length?mine.map(i=>itemCard(i,"brand")).join(""):`<div class="empty">Aún no has enviado ${TIPOS[S.tab].toLowerCase()}.</div>`);
+  return lg+tabs([["meta","Meta volante"],["dia","Días de marca"],["oferta","Ofertas"]])+(()=>{const f=brandForm();return f})()+`<h2 style="margin:22px 0 10px">${S.tab==="dia"&&S.dia?"Mis concursos del "+fdate(S.dia):"Mis envíos"}</h2>`+(mine.length?mine.map(i=>itemCard(i,"brand")).join(""):`<div class="empty">Aún no has enviado ${TIPOS[S.tab].toLowerCase()}.</div>`);
 }
 function viewJefe(){
   const cnt=e=>db.items.filter(i=>i.estado===e).length;
@@ -183,7 +189,7 @@ function viewAli(){
   const vis=db.items.filter(i=>i.estado==="aprobado"&&forAli(i,a)&&(S.lin==="Todas"||linea(i.marca)===S.lin));
   let h=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><h1>Mis incentivos de diciembre</h1><div class="tabs" style="margin:0">${["Todas","Terminales","Tecnología"].map(x=>`<button class="tab" aria-selected="${S.lin===x}" data-lin="${x}">${x}</button>`).join("")}</div></div>`;
   h+=tabs([["meta","Meta volante"],["dia","Días de marca"],["oferta","Ofertas"]]);
-  const l=vis.filter(i=>i.tipo===S.tab);
+  const l=vis.filter(i=>i.tipo===S.tab).sort((x,y)=>S.tab==="dia"?x.d.fecha.localeCompare(y.d.fecha):0);
   if(S.tab==="meta"&&l.length){const tu=l.reduce((s,i)=>s+mU(i.d.metas[a]),0),tm=l.reduce((s,i)=>s+mM(i.d.metas[a]),0);
     h+=`<div class="card pn"><div class="row" style="justify-content:space-between;align-items:flex-end"><div><span class="mut">Todas mis metas volantes (unidades y millones se suman por separado)</span><div class="row" style="gap:24px">${tu?`<div class="big">${num(tu)} <span style="font-size:18px">und</span></div>`:""}${tm?`<div class="big">$${num(tm)} <span style="font-size:18px">millones</span></div>`:""}</div></div><span class="mut">${l.length} marca${l.length>1?"s":""} aprobada${l.length>1?"s":""}</span></div><table class="stack" style="margin-top:12px"><thead><tr><th>Marca</th><th>Línea</th><th class="n">Unidades</th><th class="n">Millones</th><th>Categoría</th><th>Vigencia</th></tr></thead><tbody>${l.map(i=>`<tr><td><span class="row" style="gap:8px">${logo(i.marca)}${nom(i.marca)}</span></td><td>${linea(i.marca)}</td><td class="n">${mU(i.d.metas[a])?num(mU(i.d.metas[a])):""}</td><td class="n">${mM(i.d.metas[a])?"$"+num(mM(i.d.metas[a]))+" M":""}</td><td>${esc(i.d.metas[a].cat)}</td><td>${fdate(i.d.desde)} – ${fdate(i.d.hasta)}</td></tr>`).join("")}</tbody></table><p class="note">Abajo está el detalle de pagos de cada marca. Solo aparecen las metas ya aprobadas por el jefe de canal.</p></div>`}
   if(S.tab==="dia")h+=`<div class="card"><h3 style="margin-bottom:10px">Calendario de días de marca</h3>${calendar()}</div>`;
@@ -206,7 +212,7 @@ const v=id=>document.getElementById(id).value;
 
 app.addEventListener("submit",e=>{
   e.preventDefault();const f=e.target;
-  if(f.id==="flog"){if(v("pw")!=="1234"){toast("Contraseña incorrecta");return}const[role,name]=v("u").split("|");S.user={role,name};S.tab=null;S.lin="Todas";render();window.scrollTo(0,0);return}
+  if(f.id==="flog"){if(v("pw")!=="1234"){toast("Contraseña incorrecta");return}const[role,name]=v("u").split("|");S.user={role,name};S.tab=null;S.dia=null;S.lin="Todas";render();window.scrollTo(0,0);return}
   if(f.id==="fcal"){const k=v("cd"),m=v("cm");if(!k)return;if(m)db.cal[k]=m;else delete db.cal[k];save();render();toast(m?`${fdate(k)} asignado a ${nom(m)}`:`${fdate(k)} quedó libre`);return}
   if(f.id==="f"){
     const pagos=readPays();if(!pagos.length){toast("Agrega al menos una referencia con su pago");return}
@@ -220,8 +226,9 @@ app.addEventListener("submit",e=>{
   }
 });
 app.addEventListener("click",e=>{
-  const t=e.target.closest("[data-tab],[data-lin],[data-act]");if(!t)return;
+  const t=e.target.closest("[data-tab],[data-lin],[data-act],[data-day]");if(!t)return;
   if(t.dataset.tab){S.tab=t.dataset.tab;S.rej=null;render();return}
+  if(t.dataset.day){S.dia=t.dataset.day;render();return}
   if(t.dataset.lin){S.lin=t.dataset.lin;render();return}
   const a=t.dataset.act,id=+t.dataset.id,it=db.items.find(i=>i.id===id);
   if(a==="out"){S.user=null;render()}
