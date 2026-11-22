@@ -112,7 +112,10 @@ function seed(){
     ],logos:{},next:13};
 }
 let db;try{db=JSON.parse(localStorage.getItem(KEY))}catch(e){}
-if(!db||!db.items)db=seed();db.logos=db.logos||{};
+if(!db||!db.items)db=seed();db.logos=db.logos||{};db.pw=db.pw||{};
+const hash=async t=>{try{const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("tyt:"+t));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}catch(e){return"p:"+t}};
+const ukey=()=>S.user.role+"|"+S.user.name;
+const checkPw=async(k,p)=>db.pw[k]?(await hash(p))===db.pw[k]:p==="1234";
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}};
 const S={user:null,tab:null,lin:"Todas",rej:null,dia:null};
 const app=document.getElementById("app");
@@ -179,7 +182,8 @@ function viewBrand(){
 }
 function viewJefe(){
   const cnt=e=>db.items.filter(i=>i.estado===e).length;
-  let h=tabs([["pendiente",`Pendientes (${cnt("pendiente")})`],["aprobado",`Aprobados (${cnt("aprobado")})`],["rechazado",`Rechazados (${cnt("rechazado")})`],["cal","Calendario"]]);
+  let h=tabs([["pendiente",`Pendientes (${cnt("pendiente")})`],["aprobado",`Aprobados (${cnt("aprobado")})`],["rechazado",`Rechazados (${cnt("rechazado")})`],["cal","Calendario"],["usr","Usuarios"]]);
+  if(S.tab==="usr"){const g=(t,arr,f)=>`<optgroup label="${t}">${arr.map(x=>`<option value="${f}|${esc(x)}">${f==="brand"?nom(x):esc(x)} ${db.pw[f+"|"+x]?"· propia":"· inicial"}</option>`).join("")}</optgroup>`;return h+`<form class="card pn" id="frst"><h2>Restablecer contraseña</h2><p class="mut">Si una marca, un aliado o el otro jefe olvida su contraseña, vuelve a quedar en 1234 y debe cambiarla al entrar.</p><label for="ru">Usuario</label><select id="ru">${g("Marcas",MARCAS,"brand")}${g("Jefes de canal",JEFES,"jefe")}${g("Aliados",ALIADOS,"ali")}</select><button class="btn" style="margin-top:12px">Restablecer a 1234</button></form>`}
   if(S.tab==="cal")return h+`<div class="card"><h2>Días de marca · diciembre</h2><p class="note" style="margin-bottom:10px">Calendario de ejemplo mientras llega el real.</p>${calendar()}</div><form class="card pn" id="fcal"><h3>Asignar o quitar un día</h3><div class="grid" style="margin-top:8px"><div><label for="cd">Día</label><input id="cd" type="date" min="2026-12-01" max="2026-12-31" value="2026-12-01"></div><div><label for="cm">Marca</label><select id="cm"><option value="">— Sin marca —</option>${MARCAS.map(m=>`<option value="${m}">${nom(m)}</option>`).join("")}</select></div></div><button class="btn" style="margin-top:12px">Guardar día</button></form>`;
   const l=db.items.filter(i=>i.estado===S.tab).sort((a,b)=>b.id-a.id);
   return h+(l.length?l.map(i=>itemCard(i,"jefe")).join(""):`<div class="empty">No hay incentivos ${S.tab==="pendiente"?"pendientes por revisar":S.tab+"s"}.</div>`);
@@ -198,21 +202,28 @@ function viewAli(){
 }
 function viewLogin(){
   const opt=(g,arr,f)=>`<optgroup label="${g}">${arr.map(x=>`<option value="${f}|${esc(x)}">${f==="brand"?nom(x):esc(x)}</option>`).join("")}</optgroup>`;
-  return`<div class="top"><b>Incentivos TYT</b><span>Metas volantes · Días de marca · Ofertas</span></div><div class="wrap"><form class="card login" id="flog"><h1 style="margin-bottom:6px">Ingresar</h1><p class="mut" style="margin-top:0">Cada marca ve solo lo suyo, los jefes de canal aprueban y cada aliado ve únicamente sus incentivos aprobados.</p><label for="u">Usuario</label><select id="u">${opt("Marcas",MARCAS,"brand")}${opt("Jefes de canal",JEFES,"jefe")}${opt("Aliados",ALIADOS,"ali")}</select><label for="pw" style="margin-top:12px">Contraseña</label><input id="pw" type="password" value="1234" autocomplete="off"><button class="btn" style="width:100%;margin-top:16px">Entrar</button><p class="note">Prototipo: la contraseña de prueba es 1234 para todos. Los incentivos precargados son datos de ejemplo.</p><div class="row" style="margin-top:10px"><button type="button" class="btn sec sm" data-act="reset">Restablecer datos de ejemplo</button><a class="btn sec sm" style="text-decoration:none;display:inline-flex;align-items:center" href="presentacion.pdf" target="_blank" rel="noopener">Ver presentación (PDF)</a></div></form></div>`;
+  return`<div class="top"><b>Incentivos TYT</b><span>Metas volantes · Días de marca · Ofertas</span></div><div class="wrap"><form class="card login" id="flog"><h1 style="margin-bottom:6px">Ingresar</h1><p class="mut" style="margin-top:0">Cada marca ve solo lo suyo, los jefes de canal aprueban y cada aliado ve únicamente sus incentivos aprobados.</p><label for="u">Usuario</label><select id="u">${opt("Marcas",MARCAS,"brand")}${opt("Jefes de canal",JEFES,"jefe")}${opt("Aliados",ALIADOS,"ali")}</select><label for="pw" style="margin-top:12px">Contraseña</label><input id="pw" type="password" autocomplete="current-password" placeholder="Tu contraseña"><button class="btn" style="width:100%;margin-top:16px">Entrar</button><p class="note">La contraseña inicial es 1234; cámbiala al entrar con el botón Contraseña. Si la olvidas, un jefe de canal puede restablecerla. Los incentivos precargados son datos de ejemplo.</p><div class="row" style="margin-top:10px"><button type="button" class="btn sec sm" data-act="reset">Restablecer datos de ejemplo</button><a class="btn sec sm" style="text-decoration:none;display:inline-flex;align-items:center" href="presentacion.pdf" target="_blank" rel="noopener">Ver presentación (PDF)</a></div></form></div>`;
+}
+function pwPanel(){
+  if(S.pw)return`<form class="card pn" id="fpw"><h2>Cambiar contraseña</h2><div class="grid" style="margin-top:10px"><div><label for="p0">Contraseña actual</label><input id="p0" type="password" autocomplete="current-password" required></div><div><label for="p1">Nueva contraseña</label><input id="p1" type="password" autocomplete="new-password" minlength="6" required></div><div><label for="p2">Repite la nueva</label><input id="p2" type="password" autocomplete="new-password" minlength="6" required></div></div><p class="note">Mínimo 6 caracteres.</p><div class="row" style="margin-top:12px"><button class="btn">Guardar contraseña</button><button type="button" class="btn sec" data-act="pw-x">Cancelar</button></div></form>`;
+  if(!db.pw[ukey()])return`<div class="card row" style="justify-content:space-between;background:var(--am);border-color:transparent"><span style="color:var(--ami);font-weight:600">Estás usando la contraseña inicial 1234. Cámbiala por una propia.</span><button class="btn sm" data-act="pw">Cambiar ahora</button></div>`;
+  return"";
 }
 function render(){
   if(!S.user){app.innerHTML=viewLogin();return}
   const r={brand:"Marca",jefe:"Jefe de canal",ali:"Aliado"}[S.user.role];
   const n=S.user.role==="brand"?nom(S.user.name):S.user.name;
-  app.innerHTML=`<div class="top"><b>Incentivos TYT</b><div class="who"><span>${r}: <b>${esc(n)}</b></span><button class="btn sm" data-act="out">Salir</button></div></div><div class="wrap">${S.user.role==="brand"?viewBrand():S.user.role==="jefe"?viewJefe():viewAli()}</div>`;
+  app.innerHTML=`<div class="top"><b>Incentivos TYT</b><div class="who"><span>${r}: <b>${esc(n)}</b></span><button class="btn sm" data-act="pw">Contraseña</button><button class="btn sm" data-act="out">Salir</button></div></div><div class="wrap">${pwPanel()}${S.user.role==="brand"?viewBrand():S.user.role==="jefe"?viewJefe():viewAli()}</div>`;
 }
 const readPays=()=>[...document.querySelectorAll("#pays tbody tr")].map(tr=>({ref:tr.querySelector("[name=ref]").value.trim(),ali:+tr.querySelector("[name=ali]").value||0,staff:+tr.querySelector("[name=staff]").value||0,ase:+tr.querySelector("[name=ase]").value||0})).filter(r=>r.ref);
 const readAlis=()=>document.getElementById("todos").checked?"todos":[...document.querySelectorAll("#alis input:checked")].map(i=>i.value);
 const v=id=>document.getElementById(id).value;
 
-app.addEventListener("submit",e=>{
+app.addEventListener("submit",async e=>{
   e.preventDefault();const f=e.target;
-  if(f.id==="flog"){if(v("pw")!=="1234"){toast("Contraseña incorrecta");return}const[role,name]=v("u").split("|");S.user={role,name};S.tab=null;S.dia=null;S.lin="Todas";render();window.scrollTo(0,0);return}
+  if(f.id==="flog"){if(!(await checkPw(v("u"),v("pw")))){toast("Contraseña incorrecta");return}const[role,name]=v("u").split("|");S.pw=false;S.user={role,name};S.tab=null;S.dia=null;S.lin="Todas";render();window.scrollTo(0,0);return}
+  if(f.id==="fpw"){if(!(await checkPw(ukey(),v("p0")))){toast("La contraseña actual no es correcta");return}if(v("p1").length<6){toast("Mínimo 6 caracteres");return}if(v("p1")!==v("p2")){toast("Las contraseñas nuevas no coinciden");return}if(v("p1")==="1234"){toast("Usa una contraseña distinta a 1234");return}db.pw[ukey()]=await hash(v("p1"));save();S.pw=false;render();toast("Contraseña actualizada");return}
+  if(f.id==="frst"){const k=v("ru");delete db.pw[k];save();render();toast("Contraseña restablecida a 1234");return}
   if(f.id==="fcal"){const k=v("cd"),m=v("cm");if(!k)return;if(m)db.cal[k]=m;else delete db.cal[k];save();render();toast(m?`${fdate(k)} asignado a ${nom(m)}`:`${fdate(k)} quedó libre`);return}
   if(f.id==="f"){
     const pagos=readPays();if(!pagos.length){toast("Agrega al menos una referencia con su pago");return}
@@ -231,8 +242,10 @@ app.addEventListener("click",e=>{
   if(t.dataset.day){S.dia=t.dataset.day;render();return}
   if(t.dataset.lin){S.lin=t.dataset.lin;render();return}
   const a=t.dataset.act,id=+t.dataset.id,it=db.items.find(i=>i.id===id);
-  if(a==="out"){S.user=null;render()}
-  else if(a==="reset"){db=seed();save();toast("Datos de ejemplo restablecidos")}
+  if(a==="out"){S.user=null;S.pw=false;render()}
+  else if(a==="pw"){S.pw=true;render();window.scrollTo(0,0);document.getElementById("p0")?.focus()}
+  else if(a==="pw-x"){S.pw=false;render()}
+  else if(a==="reset"){const pw=db.pw;db=seed();db.pw=pw;save();toast("Datos de ejemplo restablecidos")}
   else if(a==="addrow")document.querySelector("#pays tbody").insertAdjacentHTML("beforeend",payRow());
   else if(a==="delrow"){const rows=document.querySelectorAll("#pays tbody tr");if(rows.length>1)t.closest("tr").remove()}
   else if(a==="ok"){it.estado="aprobado";it.por=S.user.name;it.coment="";save();render();toast(`${nom(it.marca)} aprobado y publicado para los aliados`)}
