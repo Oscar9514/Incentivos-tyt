@@ -9,6 +9,8 @@ Plataforma de incentivos de marcas para aliados: metas volantes, días de marca 
 | `index.html` | La plataforma, conectada a Firebase |
 | `firestore.rules` | Reglas de seguridad para pegar en Firestore > Reglas |
 | `instructivo.pdf` | Instructivo de uso, se abre desde la pantalla de ingreso |
+| `plantilla_meta_volante.xlsx` | Plantilla de Excel para cargar una meta volante |
+| `plantilla_dia_de_marca.xlsx` | Plantilla de Excel para cargar un concurso de día de marca |
 | `.nojekyll` | Le indica a GitHub Pages que publique los archivos tal cual |
 
 ## Puesta en marcha (una sola vez)

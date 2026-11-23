@@ -272,6 +272,51 @@ function calendar(sel){
   return`<div class="cal">${c}</div>`;
 }
 
+/* ---------- plantilla de Excel ---------- */
+async function leerXlsx(buf){
+  const u8=new Uint8Array(buf),dv=new DataView(buf),td=new TextDecoder();
+  let e=u8.length-22;while(e>=0&&dv.getUint32(e,true)!==0x06054b50)e--;if(e<0)throw new Error("noxlsx");
+  const n=dv.getUint16(e+10,true);let p=dv.getUint32(e+16,true);const files={};
+  for(let i=0;i<n;i++){const nl=dv.getUint16(p+28,true),xl=dv.getUint16(p+30,true),cl=dv.getUint16(p+32,true);files[td.decode(u8.subarray(p+46,p+46+nl))]={meth:dv.getUint16(p+10,true),csz:dv.getUint32(p+20,true),off:dv.getUint32(p+42,true)};p+=46+nl+xl+cl}
+  const get=async name=>{const f=files[name];if(!f)return null;const st=f.off+30+dv.getUint16(f.off+26,true)+dv.getUint16(f.off+28,true),data=u8.subarray(st,st+f.csz);if(f.meth===0)return td.decode(data);const out=await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer();return td.decode(out)};
+  const xml=t=>new DOMParser().parseFromString(t,"application/xml");
+  const ss=[],sst=await get("xl/sharedStrings.xml");if(sst)xml(sst).querySelectorAll("si").forEach(si=>ss.push([...si.querySelectorAll("t")].map(t=>t.textContent).join("")));
+  const wbx=await get("xl/workbook.xml"),rx=await get("xl/_rels/workbook.xml.rels");if(!wbx||!rx)throw new Error("noxlsx");
+  const rmap={};xml(rx).querySelectorAll("Relationship").forEach(x=>rmap[x.getAttribute("Id")]=x.getAttribute("Target"));
+  const out={};
+  for(const sh of xml(wbx).querySelectorAll("sheet")){
+    const rid=sh.getAttribute("r:id")||sh.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships","id");let t=rmap[rid];if(!t)continue;t=t.startsWith("/")?t.slice(1):"xl/"+t.replace(/^\.\//,"");
+    const sx=await get(t);if(!sx)continue;const rows=[];
+    xml(sx).querySelectorAll("sheetData row").forEach(rw=>{const row=[];rw.querySelectorAll("c").forEach(c=>{const ref=c.getAttribute("r")||"",col=ref.replace(/[0-9]/g,"").split("").reduce((a,ch)=>a*26+ch.charCodeAt(0)-64,0)-1,ty=c.getAttribute("t"),v=c.querySelector("v")?.textContent;row[col]=ty==="s"?ss[+v]:ty==="inlineStr"?c.querySelector("is")?.textContent:(ty==="str"||ty==="b"||ty==="e")?v:(v===undefined?"":Number(v))});rows[(+rw.getAttribute("r")||rows.length+1)-1]=row});
+    out[sh.getAttribute("name")]=rows;
+  }
+  return out;
+}
+const pnum=v=>{if(typeof v==="number")return v;let x=String(v??"").replace(/[$\s]/g,"");if(!x)return 0;if(x.includes(",")&&x.includes("."))x=x.replace(/\./g,"").replace(",",".");else if(x.includes(","))x=x.replace(",",".");else if(/^\d{1,3}(\.\d{3})+$/.test(x))x=x.replace(/\./g,"");return parseFloat(x)||0};
+const pfecha=v=>{if(typeof v==="number"&&v>20000)return new Date(Math.round((v-25569)*864e5)).toISOString().slice(0,10);const x=String(v||"").trim();let m=x.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);if(m)return`${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;m=x.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);if(m)return`${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`;return""};
+function recalcObj(){let u=0,m=0;document.querySelectorAll("[data-u]").forEach(i=>u+=parseFloat(i.value)||0);document.querySelectorAll("[data-m]").forEach(i=>m+=parseFloat(i.value)||0);const ou=document.getElementById("obju"),om=document.getElementById("objm");if(ou)ou.value=num(u);if(om)om.value=num(m)}
+async function cargarExcel(file){
+  const wb=await leerXlsx(await file.arrayBuffer()),hoja=n=>{const k=Object.keys(wb).find(x=>slug(x)===slug(n));return k?wb[k]:null};
+  const datos=hoja("Datos"),metas=hoja("Metas"),pagos=hoja("Pagos");if(!datos||!metas||!pagos)throw new Error("plantilla");
+  const dval=k=>{const row=datos.find(x=>x&&slug(String(x[0]??"")).startsWith(slug(k)));return row?row[1]:""};
+  const q=x=>document.querySelector(x),isDia=S.tab==="dia";
+  if(isDia){const t=dval("Nombre del concurso");if(t)q("#tit").value=String(t).trim()}
+  else{const a=pfecha(dval("Desde")),b=pfecha(dval("Hasta"));if(a)q("#d1").value=a;if(b)q("#d2").value=b}
+  const c=dval("Condiciones");if(c!==""&&c!=null)q("#cond").value=String(c);
+  ALIADOS.forEach((a,i)=>{q(`[data-u="${i}"]`).value="";q(`[data-m="${i}"]`).value="";q(`[data-p="${i}"]`).value="";q(`[data-cat="${i}"]`).value="A"});
+  const desconocidos=[],part=[];let nMet=0;
+  metas.slice(1).forEach(row=>{if(!row||!String(row[0]??"").trim())return;const i=ALIADOS.findIndex(a=>slug(a)===slug(String(row[0])));if(i<0){desconocidos.push(String(row[0]));return}
+    const u=pnum(row[1]),mm=pnum(row[2]),cat=String(row[3]??"").trim().toUpperCase(),pr=String(row[4]??"").trim();
+    if(u)q(`[data-u="${i}"]`).value=u;if(mm)q(`[data-m="${i}"]`).value=mm;if(["A","B","C"].includes(cat))q(`[data-cat="${i}"]`).value=cat;if(pr)q(`[data-p="${i}"]`).value=pr;if(u||mm)nMet++;
+    if(isDia&&/^s/i.test(String(row[5]??"").trim()))part.push(ALIADOS[i])});
+  if(isDia){const todos=!/^n/i.test(String(dval("Aplica a todos")||"SI").trim());q("#todos").checked=todos;q("#alis").hidden=todos;document.querySelectorAll("#alis input").forEach(x=>x.checked=!todos&&part.includes(x.value))}
+  const rows=pagos.slice(1).filter(x=>x&&String(x[0]??"").trim()).map(x=>({ref:String(x[0]).trim(),ali:pnum(x[1])||"",staff:pnum(x[2])||"",ase:pnum(x[3])||""}));
+  if(rows.length)q("#pays tbody").innerHTML=rows.map(x=>payRow(x,false)).join("");
+  recalcObj();
+  return{nMet,nPag:rows.length,desconocidos,sinPart:isDia&&!q("#todos").checked&&!part.length};
+}
+const xlsBox=k=>`<div class="tip" style="background:var(--bg);border:1.5px dashed var(--ln);border-radius:12px;padding:12px;margin:12px 0"><b>Cargar con plantilla de Excel</b><p class="note" style="margin:4px 0 8px">Descarga la plantilla, llénala y cárgala: el formulario se llena solo para que lo revises antes de enviar.</p><div class="row"><a class="btn sec sm" style="text-decoration:none;display:inline-flex;align-items:center" href="${k==="meta"?"plantilla_meta_volante.xlsx":"plantilla_dia_de_marca.xlsx"}" download>Descargar plantilla</a><label class="btn sm" style="margin:0;color:#fff;display:inline-flex;align-items:center">Cargar desde Excel<input type="file" id="xlsin" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden></label></div></div>`;
+
 /* ---------- formularios de la marca ---------- */
 const val=x=>x?` value="${esc(x)}"`:"";
 const payRow=(r={},pr)=>`<tr><td><input name="ref" placeholder="Referencia o familia"${val(r.ref)}></td><td><input name="ali" type="number" inputmode="numeric" placeholder="0"${val(r.ali)}></td><td><input name="staff" type="number" inputmode="numeric" placeholder="0"${val(r.staff)}></td><td><input name="ase" type="number" inputmode="numeric" placeholder="0"${val(r.ase)}></td>${pr?`<td><input name="premio" maxlength="80" placeholder="Ej.: bono $50.000, audífonos"${val(r.premio)}></td>`:""}<td><button type="button" class="btn sec sm" data-act="delrow" aria-label="Quitar fila">✕</button></td></tr>`;
@@ -284,14 +329,14 @@ const editHead=E=>E?`<div class="card" style="background:var(--am);border-color:
 const sendBtn=(E,txt)=>`<button class="btn" style="margin-top:14px;width:100%">${E?"Reenviar a aprobación":txt}</button>`;
 function brandForm(E){
   const m=S.user.name,d=E?.d||{};
-  if(S.tab==="meta")return`${editHead(E)}<form class="card pn" id="f"><h2>${E?"Corregir meta volante":"Nueva meta volante de "+mesCorto(S.mes)}</h2><p class="mut">Formato único: meta, categoría y premio por aliado, pagos y condiciones.</p><div class="grid"><div><label for="d1">Desde</label><input id="d1" type="date" value="${d.desde||S.mes+"-01"}" required></div><div><label for="d2">Hasta</label><input id="d2" type="date" value="${d.hasta||S.mes+"-"+lastDay(S.mes)}" required></div></div>${metaFields(false,d.metas)}${payEditor(d.pagos,false)}<label for="cond" style="margin-top:16px">Condiciones (corte, fecha de pago, con o sin IVA)</label><textarea id="cond">${esc(d.cond||"")}</textarea>${sendBtn(E,"Enviar a aprobación")}</form>`;
+  if(S.tab==="meta")return`${editHead(E)}<form class="card pn" id="f"><h2>${E?"Corregir meta volante":"Nueva meta volante de "+mesCorto(S.mes)}</h2><p class="mut">Formato único: meta, categoría y premio por aliado, pagos y condiciones.</p>${xlsBox("meta")}<div class="grid"><div><label for="d1">Desde</label><input id="d1" type="date" value="${d.desde||S.mes+"-01"}" required></div><div><label for="d2">Hasta</label><input id="d2" type="date" value="${d.hasta||S.mes+"-"+lastDay(S.mes)}" required></div></div>${metaFields(false,d.metas)}${payEditor(d.pagos,false)}<label for="cond" style="margin-top:16px">Condiciones (corte, fecha de pago, con o sin IVA)</label><textarea id="cond">${esc(d.cond||"")}</textarea>${sendBtn(E,"Enviar a aprobación")}</form>`;
   if(S.tab==="dia"){const days=myDays();
     if(E&&!days.includes(d.fecha))days.push(d.fecha);
     if(!days.length)return`<div class="empty">TYT todavía no te ha asignado días de marca en ${mesCorto(S.mes)}. Cuando el jefe de canal te asigne días, aparecerán aquí.</div>`;
     if(E)S.dia=d.fecha;if(!days.includes(S.dia))S.dia=days[0];
     const st=k=>{const l=db.items.filter(i=>i.tipo==="dia"&&i.d.fecha===k);if(!l.length)return"Sin concurso";const c=e=>l.filter(i=>i.estado===e).length;return[c("aprobado")&&c("aprobado")+" aprobado",c("pendiente")&&c("pendiente")+" pendiente",c("rechazado")&&c("rechazado")+" rechazado"].filter(Boolean).join(" · ")};
     const tec=myEntry(S.dia)?.tec||d.tec||"";
-    return`${E?"":`<div class="card"><h2>Tus días de marca</h2><p class="mut">Elige el día y monta un concurso distinto para cada uno.</p><div class="days">${days.sort().map(k=>`<button type="button" class="day${S.dia===k?" on":""}" data-day="${k}"><b>${fdate(k)}</b>${myEntry(k)?.tec?`<span>${esc(myEntry(k).tec)}</span><br>`:""}<span>${st(k)}</span></button>`).join("")}</div></div>`}${editHead(E)}<form class="card pn" id="f"><h2>${E?"Corregir concurso":"Concurso"} del ${fdate(S.dia)}${tec?" · "+esc(tec):""}</h2><p class="mut">Este concurso aplica solo para ese día.</p><input type="hidden" id="fecha" value="${S.dia}"><label for="tit">Nombre del concurso</label><input id="tit" required placeholder="Ej.: ${nom(m)} Day"${val(d.titulo)}>${aliPick(d.aliados)}<h3 style="margin:18px 0 4px">Meta del día</h3><p class="note" style="margin:0 0 8px">Si el concurso exige una meta, escríbela por aliado igual que en la meta volante.</p>${metaFields(true,d.metas)}${imgBox()}${payEditor(d.pagos,false)}<label for="cond" style="margin-top:16px">Condiciones</label><textarea id="cond">${esc(d.cond||"")}</textarea>${sendBtn(E,"Enviar concurso del "+fdate(S.dia)+" a aprobación")}</form>`}
+    return`${E?"":`<div class="card"><h2>Tus días de marca</h2><p class="mut">Elige el día y monta un concurso distinto para cada uno.</p><div class="days">${days.sort().map(k=>`<button type="button" class="day${S.dia===k?" on":""}" data-day="${k}"><b>${fdate(k)}</b>${myEntry(k)?.tec?`<span>${esc(myEntry(k).tec)}</span><br>`:""}<span>${st(k)}</span></button>`).join("")}</div></div>`}${editHead(E)}<form class="card pn" id="f"><h2>${E?"Corregir concurso":"Concurso"} del ${fdate(S.dia)}${tec?" · "+esc(tec):""}</h2><p class="mut">Este concurso aplica solo para ese día.</p>${xlsBox("dia")}<input type="hidden" id="fecha" value="${S.dia}"><label for="tit">Nombre del concurso</label><input id="tit" required placeholder="Ej.: ${nom(m)} Day"${val(d.titulo)}>${aliPick(d.aliados)}<h3 style="margin:18px 0 4px">Meta del día</h3><p class="note" style="margin:0 0 8px">Si el concurso exige una meta, escríbela por aliado igual que en la meta volante.</p>${metaFields(true,d.metas)}${imgBox()}${payEditor(d.pagos,false)}<label for="cond" style="margin-top:16px">Condiciones</label><textarea id="cond">${esc(d.cond||"")}</textarea>${sendBtn(E,"Enviar concurso del "+fdate(S.dia)+" a aprobación")}</form>`}
   return`${editHead(E)}<form class="card pn" id="f"><h2>${E?"Corregir oferta":"Nueva oferta específica"}</h2><p class="mut">Incentivos puntuales, como “hoy pagamos $25.000 por esta referencia”.</p><div class="grid"><div style="grid-column:1/-1"><label for="tit">Título de la oferta</label><input id="tit" required${val(d.titulo)}></div><div><label for="d1">Desde</label><input id="d1" type="date" min="${S.mes}-01" max="${S.mes}-${lastDay(S.mes)}" required${val(d.desde)}></div><div><label for="d2">Hasta</label><input id="d2" type="date" required${val(d.hasta)}></div></div>${imgBox()}${aliPick(d.aliados)}${payEditor(d.pagos,true)}<label for="cond" style="margin-top:16px">Condiciones</label><textarea id="cond">${esc(d.cond||"")}</textarea>${sendBtn(E,"Enviar a aprobación")}</form>`;
 }
 function viewBrand(){
@@ -435,11 +480,7 @@ app.addEventListener("click",async e=>{
   else if(a==="crear"){if(S.creados&&!S.creados.done)return;try{await crearUsuarios()}catch(e){console.error(e);toast(errMsg(e))}}
   else if(a==="copiar"){const txt=S.creados.rows.filter(r=>r.pw).map(r=>`${r.label}: ${r.pw}`).join("\n");try{await navigator.clipboard.writeText(txt);toast("Lista copiada")}catch(e){toast("No se pudo copiar. Selecciona la tabla y cópiala a mano.")}}
 });
-app.addEventListener("input",e=>{
-  const x=e.target;if(!(x.dataset.u!==undefined||x.dataset.m!==undefined))return;
-  let u=0,m=0;document.querySelectorAll("[data-u]").forEach(i=>u+=parseFloat(i.value)||0);document.querySelectorAll("[data-m]").forEach(i=>m+=parseFloat(i.value)||0);
-  const ou=document.getElementById("obju"),om=document.getElementById("objm");if(ou)ou.value=num(u);if(om)om.value=num(m);
-});
+app.addEventListener("input",e=>{const x=e.target;if(x.dataset.u!==undefined||x.dataset.m!==undefined)recalcObj()});
 app.addEventListener("change",async e=>{
   const x=e.target;
   if(x.id==="fm"){S.fM=x.value;render();return}
@@ -448,6 +489,13 @@ app.addEventListener("change",async e=>{
   if(x.id==="cm"){const b=document.getElementById("tecbox");b.hidden=x.value!=="TECNOLOGIA";document.getElementById("ct").required=!b.hidden;if(!b.hidden)document.getElementById("ct").focus();return}
   if(x.id==="mes"){S.mes=x.value;S.dia=null;S.rej=null;S.fD="";S.calDay="";resetEdit();await act(async()=>{await loadMonth();render()});return}
   if(x.id==="todos"){document.getElementById("alis").hidden=x.checked;return}
+  if(x.id==="xlsin"){const file=x.files[0];if(!file)return;x.value="";
+    if(!/\.xlsx$/i.test(file.name)){toast("Usa la plantilla en formato Excel (.xlsx).");return}
+    try{const r=await cargarExcel(file);let msg=`Plantilla cargada: ${r.nMet} aliado${r.nMet===1?"":"s"} con meta y ${r.nPag} referencia${r.nPag===1?"":"s"}. Revisa y envía.`;
+      if(r.desconocidos.length)msg+=` No reconocí: ${r.desconocidos.slice(0,3).join(", ")}${r.desconocidos.length>3?"…":""}.`;
+      if(r.sinPart)msg+=" Marca SI en Participa o elige los aliados aquí.";toast(msg)}
+    catch(err){console.error(err);toast(err.message==="plantilla"?"El archivo no tiene las hojas Datos, Metas y Pagos. Usa la plantilla de la plataforma.":"No se pudo leer el archivo. Guárdalo como Excel (.xlsx) e inténtalo de nuevo.")}
+    return}
   if(x.id==="ofimgin"){const file=x.files[0];if(!file)return;x.value="";achicar(file,1200,900000).then(data=>{S.ofImg=data;document.getElementById("ofprev").innerHTML=`<img class="ofimg" src="${data}" alt="Vista previa"><button type="button" class="btn sec sm" data-act="ofimgx">Quitar imagen</button>`;x.closest("label").firstChild.textContent="Cambiar imagen"}).catch(()=>toast("No se pudo leer la imagen. Prueba con otro archivo JPG o PNG."));return}
   if(x.id==="logoin"){const file=x.files[0];if(!file)return;x.value="";achicar(file,160,300000).then(data=>act(async()=>{await setDoc(doc(fs,"logos",slug(S.user.name)),{data});db.logos[S.user.name]=data;render()},"Logo actualizado")).catch(()=>toast("No se pudo leer la imagen"))}
 });
