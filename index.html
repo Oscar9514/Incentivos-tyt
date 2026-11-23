@@ -59,7 +59,7 @@ td input,td select{min-height:40px;padding:7px 9px}
 .cal .h{font-size:12px;color:var(--mut);text-align:center;font-weight:600}
 .cal .d{border:1px solid var(--ln);border-radius:8px;min-height:62px;padding:4px;font-size:12px}
 .cal .d.on{background:var(--em);color:#fff;border-color:var(--em)}
-.cal .d span{display:block;font-weight:800;font-size:11px;overflow-wrap:anywhere;line-height:1.1;margin-top:3px}
+.cal .d span{display:block;font-weight:800;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;margin-top:2px}
 .login{max-width:440px;margin:6vh auto 0}
 .mesbar{display:flex;align-items:center;gap:10px;margin:0 0 16px}.mesbar label{margin:0;color:var(--ink);font-size:15px}.mesbar select{width:auto;min-width:220px;font-weight:700}
 .days{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px}.day{border:2px solid var(--ln);background:var(--bg);color:var(--ink);border-radius:12px;padding:12px;text-align:left;cursor:pointer;font:inherit;min-height:44px}.day b{display:block;font-size:17px}.day b::first-letter{text-transform:uppercase}.day span{font-size:13px;color:var(--mut)}.day.on{border-color:var(--em);background:var(--pk)}.day.on span{color:var(--pki)}
@@ -138,7 +138,7 @@ async function act(fn,ok){if(S.busy)return;S.busy=true;try{await fn();if(ok)toas
 /* ---------- datos ---------- */
 async function loadCommon(){
   const[c,l]=await Promise.all([getDocs(collection(fs,"cal")),getDocs(collection(fs,"logos"))]);
-  db.cal={};c.forEach(d=>db.cal[d.id]=d.data().marca);
+  db.cal={};c.forEach(d=>{const x=d.data(),e=x.e||(x.marca?[{marca:x.marca,tec:""}]:[]);if(e.length)db.cal[d.id]=e});
   db.logos={};l.forEach(d=>{if(MS[d.id])db.logos[MS[d.id]]=d.data().data});
 }
 async function loadMonth(){
@@ -173,7 +173,7 @@ async function aprobar(it){
     const as=slug(a),id=it.id+"_"+as,base={as,ms:it.ms,marca:it.marca,tipo:it.tipo,mes:it.mes,creado:serverTimestamp()};
     const dA={...it.d};if(it.tipo==="meta"){dA.metas={[a]:it.d.metas[a]};delete dA.objU;delete dA.objM}else dA.aliados=[a];
     b.set(doc(fs,"pub_ali",id),{...base,d:dA});
-    const dS={titulo:it.d.titulo||"",fecha:it.d.fecha||"",desde:it.d.desde||"",hasta:it.d.hasta||"",cond:it.d.cond||"",pagos:(it.d.pagos||[]).filter(p=>p.ase>0).map(p=>({ref:p.ref,ase:p.ase})),metas:{[a]:{und:1,mill:0}},aliados:[a]};
+    const dS={tec:it.d.tec||"",titulo:it.d.titulo||"",fecha:it.d.fecha||"",desde:it.d.desde||"",hasta:it.d.hasta||"",cond:it.d.cond||"",pagos:(it.d.pagos||[]).filter(p=>p.ase>0).map(p=>({ref:p.ref,ase:p.ase})),metas:{[a]:{und:1,mill:0}},aliados:[a]};
     b.set(doc(fs,"pub_ase",id),{...base,d:dS});
   }
   await b.commit();
@@ -212,19 +212,22 @@ function itemCard(it,mode){
   let actions="";
   if(mode==="jefe"&&it.estado==="pendiente")actions=S.rej===it.id?`<div style="margin-top:12px"><label for="rc">Motivo del rechazo</label><textarea id="rc" placeholder="Qué debe corregir la marca"></textarea><div class="row" style="margin-top:8px"><button class="btn no" data-act="rej-ok" data-id="${it.id}">Confirmar rechazo</button><button class="btn sec" data-act="rej-x">Cancelar</button></div></div>`:`<div class="row" style="margin-top:12px"><button class="btn" data-act="ok" data-id="${it.id}">✓ Aprobar y publicar</button><button class="btn no" data-act="rej" data-id="${it.id}">Rechazar</button></div>`;
   const st=it.estado==="aprobado"&&it.por?` por ${esc(it.por)}`:"";
-  return`<div class="card"><div class="row" style="justify-content:space-between"><div class="row">${logo(it.marca)}<h3>${nom(it.marca)} · ${TIPOS[it.tipo]}</h3></div>${mode==="ali"?`<span class="tag">${linea(it.marca)}</span>`:`<span class="pill p-${it.estado}">${it.estado[0].toUpperCase()+it.estado.slice(1)}${st}</span>`}</div>${it.coment?`<p class="note" style="color:var(--pki)"><b>Comentario del jefe:</b> ${esc(it.coment)}</p>`:""}${detail(it,mode==="ali"?S.user.name:null)}${actions}</div>`;
+  return`<div class="card"><div class="row" style="justify-content:space-between"><div class="row">${logo(it.marca)}<h3>${esc(nomIt(it))} · ${TIPOS[it.tipo]}</h3></div>${mode==="ali"?`<span class="tag">${linea(it.marca)}</span>`:`<span class="pill p-${it.estado}">${it.estado[0].toUpperCase()+it.estado.slice(1)}${st}</span>`}</div>${it.coment?`<p class="note" style="color:var(--pki)"><b>Comentario del jefe:</b> ${esc(it.coment)}</p>`:""}${detail(it,mode==="ali"?S.user.name:null)}${actions}</div>`;
 }
 function tabs(list){if(!list.some(t=>t[0]===S.tab))S.tab=list[0][0];return`<div class="tabs" role="tablist">${list.map(([k,l])=>`<button class="tab" role="tab" aria-selected="${S.tab===k}" data-tab="${k}">${l}</button>`).join("")}</div>`}
 function calendar(){
   const[cy,cm]=S.mes.split("-").map(Number),off=(new Date(cy,cm-1,1).getDay()+6)%7;let c="";
   ["L","M","M","J","V","S","D"].forEach(x=>c+=`<div class="h">${x}</div>`);for(let i=0;i<off;i++)c+="<div></div>";
-  for(let d=1;d<=lastDay(S.mes);d++){const k=`${S.mes}-${String(d).padStart(2,"0")}`,m=db.cal[k];c+=`<div class="d${m?" on":""}">${d}${m?`<span>${nom(m)}</span>`:""}</div>`}
+  for(let d=1;d<=lastDay(S.mes);d++){const k=`${S.mes}-${String(d).padStart(2,"0")}`,e=db.cal[k]||[];c+=`<div class="d${e.length?" on":""}">${d}${e.map(x=>`<span>${esc(calName(x))}</span>`).join("")}</div>`}
   return`<div class="cal">${c}</div>`;
 }
 const payRow=()=>`<tr><td><input name="ref" placeholder="Referencia o familia"></td><td><input name="ali" type="number" inputmode="numeric" placeholder="0"></td><td><input name="staff" type="number" inputmode="numeric" placeholder="0"></td><td><input name="ase" type="number" inputmode="numeric" placeholder="0"></td><td><button type="button" class="btn sec sm" data-act="delrow" aria-label="Quitar fila">✕</button></td></tr>`;
 const payEditor=()=>`<h3 style="margin:18px 0 4px">Tabla de pago por referencia</h3><p class="note" style="margin:0 0 8px">Valores en pesos por unidad vendida.</p><table class="stack" id="pays"><thead><tr><th>Referencia</th><th>Pago aliado</th><th>Pago staff</th><th>Pago asesor</th><th></th></tr></thead><tbody>${payRow()}${payRow()}</tbody></table><button type="button" class="btn sec sm" style="margin-top:8px" data-act="addrow">+ Agregar referencia</button>`;
 const aliPick=()=>`<label class="chk" style="margin-top:14px"><input type="checkbox" id="todos" checked> Aplica a todos los aliados</label><div class="chks" id="alis" hidden>${ALIADOS.map(a=>`<label class="chk"><input type="checkbox" value="${esc(a)}"> ${esc(a)}</label>`).join("")}</div>`;
-const myDays=()=>Object.entries(db.cal).filter(([k,b])=>b===S.user.name&&k.startsWith(S.mes)).map(([k])=>k).sort();
+const calName=x=>x.marca==="TECNOLOGIA"?(x.tec||"Tecnología"):nom(x.marca);
+const myEntry=k=>(db.cal[k]||[]).find(x=>x.marca===S.user.name);
+const myDays=()=>Object.keys(db.cal).filter(k=>k.startsWith(S.mes)&&myEntry(k)).sort();
+const nomIt=it=>nom(it.marca)+(it.d?.tec?" ("+it.d.tec+")":"");
 function brandForm(){
   const m=S.user.name;
   if(S.tab==="meta")return`<form class="card pn" id="f"><h2>Nueva meta volante de ${mesCorto(S.mes)}</h2><p class="mut">Formato único: objetivo, meta y categoría por aliado, pagos y condiciones.</p><div class="grid"><div><label for="obju">Objetivo total en unidades</label><input id="obju" type="number" inputmode="numeric" min="0" placeholder="0"></div><div><label for="objm">Objetivo total en millones</label><input id="objm" type="number" inputmode="decimal" step="any" min="0" placeholder="0"></div><div><label for="d1">Desde</label><input id="d1" type="date" value="${S.mes}-01" required></div><div><label for="d2">Hasta</label><input id="d2" type="date" value="${S.mes}-${lastDay(S.mes)}" required></div></div><h3 style="margin:18px 0 8px">Meta por aliado</h3><table class="stack"><thead><tr><th>Aliado</th><th>Unidades</th><th>Millones</th><th>Categoría</th></tr></thead><tbody>${ALIADOS.map((a,i)=>`<tr><td>${esc(a)}</td><td><input type="number" inputmode="numeric" min="0" data-u="${i}" placeholder="0"></td><td><input type="number" inputmode="decimal" step="any" min="0" data-m="${i}" placeholder="0"></td><td><select data-cat="${i}"><option>A</option><option>B</option><option>C</option></select></td></tr>`).join("")}</tbody></table><p class="note">Llena unidades, millones o las dos. Millones en millones de pesos (ej.: 85,5 = $85.500.000). Un aliado sin unidades ni millones no verá esta meta volante.</p>${payEditor()}<label for="cond" style="margin-top:16px">Condiciones (corte, fecha de pago, con o sin IVA). Los asesores también las ven.</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar a aprobación</button></form>`;
@@ -232,7 +235,7 @@ function brandForm(){
     if(!days.length)return`<div class="empty">TYT todavía no te ha asignado días de marca en ${mesCorto(S.mes)}. Cuando el jefe de canal te asigne días, aparecerán aquí.</div>`;
     if(!days.includes(S.dia))S.dia=days[0];
     const st=k=>{const l=db.items.filter(i=>i.tipo==="dia"&&i.d.fecha===k);if(!l.length)return"Sin concurso";const c=e=>l.filter(i=>i.estado===e).length;return[c("aprobado")&&c("aprobado")+" aprobado",c("pendiente")&&c("pendiente")+" pendiente",c("rechazado")&&c("rechazado")+" rechazado"].filter(Boolean).join(" · ")};
-    return`<div class="card"><h2>Tus días de marca</h2><p class="mut">Elige el día y monta un concurso distinto para cada uno.</p><div class="days">${days.map(k=>`<button type="button" class="day${S.dia===k?" on":""}" data-day="${k}"><b>${fdate(k)}</b><span>${st(k)}</span></button>`).join("")}</div></div><form class="card pn" id="f"><h2>Concurso del ${fdate(S.dia)}</h2><p class="mut">Este concurso aplica solo para ese día.</p><input type="hidden" id="fecha" value="${S.dia}"><label for="tit">Nombre del concurso</label><input id="tit" required placeholder="Ej.: ${nom(m)} Day">${aliPick()}${payEditor()}<label for="cond" style="margin-top:16px">Condiciones (los asesores también las ven)</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar concurso del ${fdate(S.dia)} a aprobación</button></form>`}
+    return`<div class="card"><h2>Tus días de marca</h2><p class="mut">Elige el día y monta un concurso distinto para cada uno.</p><div class="days">${days.map(k=>`<button type="button" class="day${S.dia===k?" on":""}" data-day="${k}"><b>${fdate(k)}</b>${myEntry(k).tec?`<span>${esc(myEntry(k).tec)}</span><br>`:""}<span>${st(k)}</span></button>`).join("")}</div></div><form class="card pn" id="f"><h2>Concurso del ${fdate(S.dia)}${myEntry(S.dia)?.tec?" · "+esc(myEntry(S.dia).tec):""}</h2><p class="mut">Este concurso aplica solo para ese día.</p><input type="hidden" id="fecha" value="${S.dia}"><label for="tit">Nombre del concurso</label><input id="tit" required placeholder="Ej.: ${nom(m)} Day">${aliPick()}${payEditor()}<label for="cond" style="margin-top:16px">Condiciones (los asesores también las ven)</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar concurso del ${fdate(S.dia)} a aprobación</button></form>`}
   return`<form class="card pn" id="f"><h2>Nueva oferta específica</h2><p class="mut">Incentivos puntuales, como “hoy pagamos $25.000 por esta referencia”.</p><div class="grid"><div style="grid-column:1/-1"><label for="tit">Título de la oferta</label><input id="tit" required></div><div><label for="d1">Desde</label><input id="d1" type="date" min="${S.mes}-01" max="${S.mes}-${lastDay(S.mes)}" required></div><div><label for="d2">Hasta</label><input id="d2" type="date" required></div></div>${aliPick()}${payEditor()}<label for="cond" style="margin-top:16px">Condiciones (los asesores también las ven)</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar a aprobación</button></form>`;
 }
 function viewBrand(){
@@ -255,7 +258,8 @@ function viewJefe(){
   const cnt=e=>db.items.filter(i=>i.estado===e).length;
   let h=tabs([["pendiente",`Pendientes (${cnt("pendiente")})`],["aprobado",`Aprobados (${cnt("aprobado")})`],["rechazado",`Rechazados (${cnt("rechazado")})`],["cal","Calendario"],["usr","Usuarios"]]);
   if(S.tab==="usr")return h+viewUsuarios();
-  if(S.tab==="cal")return h+`<div class="card"><h2>Días de marca · ${mesCorto(S.mes)}</h2>${calendar()}</div><form class="card pn" id="fcal"><h3>Asignar o quitar un día</h3><div class="grid" style="margin-top:8px"><div><label for="cd">Día</label><input id="cd" type="date" min="${S.mes}-01" max="${S.mes}-${lastDay(S.mes)}" value="${S.mes}-01"></div><div><label for="cm">Marca</label><select id="cm"><option value="">— Sin marca —</option>${MARCAS.map(m=>`<option value="${m}">${nom(m)}</option>`).join("")}</select></div></div><button class="btn" style="margin-top:12px">Guardar día</button></form>`;
+  if(S.tab==="cal"){const rows=Object.keys(db.cal).filter(k=>k.startsWith(S.mes)).sort().flatMap(k=>db.cal[k].map((x,i)=>({k,i,x})));
+    return h+`<div class="card"><h2>Días de marca · ${mesCorto(S.mes)}</h2>${calendar()}</div><form class="card pn" id="fcal"><h3>Agregar marca a un día</h3><p class="mut">Cada día admite hasta dos marcas, por ejemplo una de terminales y una de tecnología.</p><div class="grid" style="margin-top:8px"><div><label for="cd">Día</label><input id="cd" type="date" min="${S.mes}-01" max="${S.mes}-${lastDay(S.mes)}" value="${S.mes}-01" required></div><div><label for="cm">Marca</label><select id="cm" required><option value="">Elige la marca</option>${MARCAS.map(m=>`<option value="${m}">${nom(m)}</option>`).join("")}</select></div><div id="tecbox" hidden><label for="ct">Nombre de la tecnología *</label><input id="ct" maxlength="40" placeholder="Ej.: Lenovo, JBL, Apple Watch"></div></div><button class="btn" style="margin-top:12px">Agregar al día</button></form><div class="card"><h3>Asignaciones de ${mesCorto(S.mes)} (${rows.length})</h3>${rows.length?`<table class="stack" style="margin-top:8px"><thead><tr><th>Día</th><th>Marca</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr><td>${fdate(r.k)}</td><td>${esc(r.x.marca==="TECNOLOGIA"?"Tecnología · "+(r.x.tec||""):nom(r.x.marca))}</td><td><button type="button" class="btn sec sm" data-act="calrm" data-k="${r.k}" data-i="${r.i}">Quitar</button></td></tr>`).join("")}</tbody></table>`:`<p class="mut">Aún no hay días asignados este mes.</p>`}</div>`}
   const l=db.items.filter(i=>i.estado===S.tab).sort((a,b)=>ts(b)-ts(a));
   return h+(l.length?l.map(i=>itemCard(i,"jefe")).join(""):`<div class="empty">No hay incentivos ${S.tab==="pendiente"?"pendientes por revisar":S.tab+"s"} en ${mesCorto(S.mes)}.</div>`);
 }
@@ -272,7 +276,7 @@ function viewAli(){
 function aseCard(it,ali){
   const d=it.d,rows=(d.pagos||[]).filter(p=>p.ase>0),when=it.tipo==="dia"?fdate(d.fecha):fdate(d.desde)+" – "+fdate(d.hasta);
   const intro=it.tipo==="meta"?`<p style="margin:8px 0">Si <b>${esc(ali)}</b> cumple su meta volante con ${nom(it.marca)}, ganas por cada venta:</p>`:`<p style="margin:8px 0">Ganas por cada venta:</p>`;
-  return`<div class="card"><div class="row" style="justify-content:space-between"><div class="row">${logo(it.marca)}<h3>${nom(it.marca)}${it.tipo!=="meta"?" · "+esc(d.titulo):""}</h3></div><span class="tag">${linea(it.marca)}</span></div><p class="mut" style="margin:4px 0 0">${when}</p>${intro}${rows.length?`<table class="stack"><thead><tr><th>Referencia</th><th class="n">Tú ganas</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${esc(p.ref)}</td><td class="n"><b>${money(p.ase)}</b></td></tr>`).join("")}</tbody></table>`:`<p class="mut">Esta marca no definió pago para asesores en este incentivo.</p>`}${d.cond?`<p class="note"><b>Condiciones:</b> ${esc(d.cond)}</p>`:""}</div>`;
+  return`<div class="card"><div class="row" style="justify-content:space-between"><div class="row">${logo(it.marca)}<h3>${esc(nomIt(it))}${it.tipo!=="meta"?" · "+esc(d.titulo):""}</h3></div><span class="tag">${linea(it.marca)}</span></div><p class="mut" style="margin:4px 0 0">${when}</p>${intro}${rows.length?`<table class="stack"><thead><tr><th>Referencia</th><th class="n">Tú ganas</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${esc(p.ref)}</td><td class="n"><b>${money(p.ase)}</b></td></tr>`).join("")}</tbody></table>`:`<p class="mut">Esta marca no definió pago para asesores en este incentivo.</p>`}${d.cond?`<p class="note"><b>Condiciones:</b> ${esc(d.cond)}</p>`:""}</div>`;
 }
 function viewAse(){
   if(!db.me)return`<div class="empty">No encontramos tu ficha de asesor. Sal y regístrate de nuevo, o pide ayuda al jefe de canal.</div>`;
@@ -331,8 +335,14 @@ app.addEventListener("submit",async e=>{
     return}
   if(f.id==="fpw"){if(v("p1").length<6){toast("Mínimo 6 caracteres");return}if(v("p1")!==v("p2")){toast("Las contraseñas nuevas no coinciden");return}
     await act(async()=>{const u=auth.currentUser;await reauthenticateWithCredential(u,EmailAuthProvider.credential(u.email,v("p0")));await updatePassword(u,v("p1"));await setDoc(doc(fs,"perfil",u.uid),{cambiada:true});db.perfil={cambiada:true};S.pw=false;render()},"Contraseña actualizada");return}
-  if(f.id==="fcal"){const k=v("cd"),m=v("cm");if(!k)return;
-    await act(async()=>{if(m)await setDoc(doc(fs,"cal",k),{marca:m});else await deleteDoc(doc(fs,"cal",k));if(m)db.cal[k]=m;else delete db.cal[k];render()},m?`${fdate(k)} asignado a ${nom(m)}`:`${fdate(k)} quedó libre`);return}
+  if(f.id==="fcal"){const k=v("cd"),m=v("cm"),tec=m==="TECNOLOGIA"?v("ct").trim():"";
+    if(!k||!k.startsWith(S.mes)){toast("Elige un día de "+mesCorto(S.mes));return}if(!m){toast("Elige la marca");return}
+    if(m==="TECNOLOGIA"&&!tec){toast("Escribe el nombre de la tecnología");return}
+    const e=[...(db.cal[k]||[])];
+    if(e.length>=2){toast("Ese día ya tiene dos marcas. Quita una para agregar otra.");return}
+    if(e.some(x=>x.marca===m&&(x.tec||"").toLowerCase()===tec.toLowerCase())){toast("Esa marca ya está en ese día");return}
+    e.push({marca:m,tec});
+    await act(async()=>{await setDoc(doc(fs,"cal",k),{e});db.cal[k]=e;render()},`${fdate(k)}: ${m==="TECNOLOGIA"?tec:nom(m)} agregado`);return}
   if(f.id==="f"){
     const pagos=readPays();if(!pagos.length){toast("Agrega al menos una referencia con su pago");return}
     const d={pagos,cond:v("cond").trim()};
@@ -340,7 +350,7 @@ app.addEventListener("submit",async e=>{
       if(!Object.keys(metas).length){toast("Asigna meta al menos a un aliado");return}
       Object.assign(d,{objU:parseFloat(v("obju"))||0,objM:parseFloat(v("objm"))||0,desde:v("d1"),hasta:v("d2"),metas})}
     else{const al=readAlis();if(al!=="todos"&&!al.length){toast("Elige al menos un aliado");return}
-      Object.assign(d,{titulo:v("tit").trim(),aliados:al},S.tab==="dia"?{fecha:v("fecha")}:{desde:v("d1"),hasta:v("d2")})}
+      Object.assign(d,{titulo:v("tit").trim(),aliados:al},S.tab==="dia"?{fecha:v("fecha"),tec:myEntry(v("fecha"))?.tec||""}:{desde:v("d1"),hasta:v("d2")})}
     const it={ms:slug(S.user.name),marca:S.user.name,tipo:S.tab,estado:"pendiente",d,creado:serverTimestamp()};it.mes=mesOf(it);
     await act(async()=>{await addDoc(collection(fs,"items"),it);await loadMonth();render()},it.mes===S.mes?"Enviado. Queda pendiente de aprobación.":`Enviado a ${mesLabel(it.mes)}. Queda pendiente de aprobación.`);
   }
@@ -362,11 +372,13 @@ app.addEventListener("click",async e=>{
   else if(a==="rej"){S.rej=id;render();document.getElementById("rc")?.focus()}
   else if(a==="rej-x"){S.rej=null;render()}
   else if(a==="rej-ok"&&it){const c=v("rc").trim()||"Sin comentario";await act(async()=>{await updateDoc(doc(fs,"items",id),{estado:"rechazado",por:S.user.name,coment:c});it.estado="rechazado";it.por=S.user.name;it.coment=c;S.rej=null;render()},"Rechazado. La marca verá el comentario.")}
+  else if(a==="calrm"){const k=t.dataset.k,i=+t.dataset.i,e=(db.cal[k]||[]).filter((_,j)=>j!==i);await act(async()=>{if(e.length)await setDoc(doc(fs,"cal",k),{e});else await deleteDoc(doc(fs,"cal",k));if(e.length)db.cal[k]=e;else delete db.cal[k];render()},"Marca quitada de ese día")}
   else if(a==="crear"){if(S.creados&&!S.creados.done)return;try{await crearUsuarios()}catch(e){console.error(e);toast(errMsg(e))}}
   else if(a==="copiar"){const txt=S.creados.rows.filter(r=>r.pw).map(r=>`${r.label}: ${r.pw}`).join("\n");try{await navigator.clipboard.writeText(txt);toast("Lista copiada")}catch(e){toast("No se pudo copiar. Selecciona la tabla y cópiala a mano.")}}
 });
 app.addEventListener("change",async e=>{
   if(e.target.id==="mes"){S.mes=e.target.value;S.dia=null;S.rej=null;await act(async()=>{await loadMonth();render()});return}
+  if(e.target.id==="cm"){const b=document.getElementById("tecbox");b.hidden=e.target.value!=="TECNOLOGIA";document.getElementById("ct").required=!b.hidden;if(!b.hidden)document.getElementById("ct").focus();return}
   if(e.target.id==="todos"){document.getElementById("alis").hidden=e.target.checked;return}
   if(e.target.id==="logoin"){const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,160/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext("2d").drawImage(im,0,0,c.width,c.height);const data=c.toDataURL("image/png");act(async()=>{await setDoc(doc(fs,"logos",slug(S.user.name)),{data});db.logos[S.user.name]=data;render()},"Logo actualizado")};im.onerror=()=>toast("No se pudo leer la imagen");im.src=r.result};r.readAsDataURL(file)}
 });
