@@ -61,6 +61,7 @@ td input,td select{min-height:40px;padding:7px 9px}
 .cal .d.on{background:var(--em);color:#fff;border-color:var(--em)}
 .cal .d span{display:block;font-weight:800;font-size:11px;overflow-wrap:anywhere;line-height:1.1;margin-top:3px}
 .login{max-width:440px;margin:6vh auto 0}
+.mesbar{display:flex;align-items:center;gap:10px;margin:0 0 16px}.mesbar label{margin:0;color:var(--ink);font-size:15px}.mesbar select{width:auto;min-width:220px;font-weight:700}
 .days{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px}.day{border:2px solid var(--ln);background:var(--bg);color:var(--ink);border-radius:12px;padding:12px;text-align:left;cursor:pointer;font:inherit;min-height:44px}.day b{display:block;font-size:17px}.day b::first-letter{text-transform:uppercase}.day span{font-size:13px;color:var(--mut)}.day.on{border-color:var(--em);background:var(--pk)}.day.on span{color:var(--pki)}
 .logo{width:36px;height:36px;border-radius:8px;object-fit:contain;background:#fff;border:1px solid var(--ln);display:inline-grid;place-items:center;font-weight:800;font-size:13px;color:#DA291C;flex:none}.logo.lg{width:56px;height:56px;font-size:18px}
 .empty{padding:22px;text-align:center;color:var(--mut);border:1.5px dashed var(--ln);border-radius:14px}
@@ -93,13 +94,19 @@ const fm=(v,u)=>u==="mill"?"$"+num(v)+" M":num(v)+" und";
 const ub=(u,m)=>[u?num(u)+" und":"",m?"$"+num(m)+" M":""].filter(Boolean).join(" · ")||"—";
 const mU=m=>Number(m.und||0),mM=m=>Number(m.mill||0),hasM=m=>m&&(mU(m)>0||mM(m)>0);
 const fdate=s=>{if(!s)return"";const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d).toLocaleDateString("es-CO",{weekday:"short",day:"numeric",month:"short"})};
-const KEY="tyt-incentivos-v5";
+const KEY="tyt-incentivos-v6";
+const mesOf=it=>(it.tipo==="dia"?it.d.fecha:it.d.desde||"").slice(0,7);
+const mesLabel=k=>{const[y,m]=k.split("-").map(Number);const t=new Date(y,m-1,1).toLocaleDateString("es-CO",{month:"long",year:"numeric"});return t[0].toUpperCase()+t.slice(1)};
+const mesCorto=k=>{const[y,m]=k.split("-").map(Number);return new Date(y,m-1,1).toLocaleDateString("es-CO",{month:"long"})};
+const lastDay=k=>{const[y,m]=k.split("-").map(Number);return new Date(y,m,0).getDate()};
+const hoyMes=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")};
+const sigMes=k=>{const[y,m]=k.split("-").map(Number);const d=new Date(y,m,1);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")};
 
 function seed(){
   const metas=(vu,vm)=>Object.fromEntries(ALIADOS.map((a,i)=>[a,{und:vu?vu[i]||0:0,mill:vm?vm[i]||0:0,cat:["A","B","C"][i%3]}]));
   const pct=(v,k)=>v.map(x=>Math.round(x*k));
   return{
-    cal:{"2026-12-05":"SAMSUNG","2026-12-06":"SAMSUNG","2026-12-11":"MOTOROLA","2026-12-12":"OPPO","2026-12-18":"XIAOMI","2026-12-19":"VIVO","2026-12-20":"TECNOLOGIA"},
+    cal:{"2026-11-14":"SAMSUNG","2026-11-21":"OPPO","2026-12-05":"SAMSUNG","2026-12-06":"SAMSUNG","2026-12-11":"MOTOROLA","2026-12-12":"OPPO","2026-12-18":"XIAOMI","2026-12-19":"VIVO","2026-12-20":"TECNOLOGIA"},
     items:[
       {id:1,marca:"OPPO",tipo:"meta",estado:"aprobado",por:"Gina Bermúdez",d:{objU:4500,objM:1350,desde:"2026-12-01",hasta:"2026-12-31",metas:metas([520,410,260,300,380,240,330,180,350,290,310,150,220,280,260],pct([520,410,260,300,380,240,330,180,350,290,310,150,220,280,260],0.3)),pagos:[{ref:"Reno 14 Pro 512 GB",ali:70000,staff:15000,ase:15000},{ref:"Reno 14 256 GB",ali:56000,staff:12000,ase:12000},{ref:"A80 5G",ali:42000,staff:9000,ase:9000},{ref:"A40 128 GB",ali:28000,staff:6000,ase:6000}],cond:"Solo ventas efectivas en el informe oficial. Corte 31 dic, pago estimado 20 ene. Valores antes de IVA."}},
       {id:2,marca:"VIVO",tipo:"meta",estado:"pendiente",d:{objU:3200,objM:0,desde:"2026-12-01",hasta:"2026-12-31",metas:metas([300,250,180,200,260,150,240,120,230,200,210,110,160,190,200]),pagos:[{ref:"V50 256 GB",ali:60000,staff:12000,ase:13000},{ref:"Y29 128 GB",ali:30000,staff:6000,ase:7000}],cond:"Corte 31 dic. Valores con IVA."}},
@@ -109,15 +116,23 @@ function seed(){
       {id:6,marca:"MOTOROLA",tipo:"dia",estado:"pendiente",d:{fecha:"2026-12-11",titulo:"Moto Day",aliados:["COS BOGOTA","ATENTO BOGOTA","ARCOS BOGOTA"],pagos:[{ref:"moto g86",ali:15000,staff:4000,ase:8000}],cond:"Solo sedes Bogotá."}},
       ...[["SAMSUNG",7,60,"aprobado","César",1],["XIAOMI",8,450,"aprobado","Gina Bermúdez"],["HONOR",9,250,"aprobado","Gina Bermúdez"],["MOTOROLA",10,350,"aprobado","César"],["TCL",11,200,"pendiente"]].map(([m,id,b,e,por,u])=>({id,marca:m,tipo:"meta",estado:e,por,d:{objU:u?0:b*15,objM:u?b*15:0,desde:"2026-12-01",hasta:"2026-12-31",metas:(v=>u?metas(null,v):metas(v))(ALIADOS.map((_,i)=>Math.round(b*(0.5+((i*37+id)%10)/10)))),pagos:[{ref:"Gama alta",ali:60000,staff:12000,ase:12000},{ref:"Gama media",ali:40000,staff:8000,ase:8000},{ref:"Gama entrada",ali:20000,staff:4000,ase:5000}],cond:"Solo ventas efectivas en el informe oficial. Corte 31 dic."}}))
       ,{id:12,marca:"SAMSUNG",tipo:"dia",estado:"aprobado",por:"Gina Bermúdez",d:{fecha:"2026-12-06",titulo:"Domingo Galaxy Tab",aliados:"todos",pagos:[{ref:"Galaxy Tab A9+",ali:15000,staff:4000,ase:8000},{ref:"Galaxy Watch8",ali:10000,staff:2000,ase:5000}],cond:"Concurso distinto al del sábado. Aplica solo a ventas del 6 de diciembre."}}
-    ],logos:{},next:13};
+      ,{id:13,marca:"OPPO",tipo:"meta",estado:"aprobado",por:"César",d:{objU:4000,objM:0,desde:"2026-11-01",hasta:"2026-11-30",metas:metas([480,380,240,280,350,220,300,160,320,270,290,140,200,260,240]),pagos:[{ref:"Reno 13 256 GB",ali:60000,staff:12000,ase:12000},{ref:"A60 128 GB",ali:25000,staff:5000,ase:5000}],cond:"Mes cerrado. Corte 30 nov."}}
+      ,{id:14,marca:"SAMSUNG",tipo:"meta",estado:"aprobado",por:"Gina Bermúdez",d:{objU:0,objM:800,desde:"2026-11-01",hasta:"2026-11-30",metas:metas(null,[65,50,30,40,55,30,45,20,45,40,40,20,30,35,40]),pagos:[{ref:"Gama alta",ali:55000,staff:11000,ase:11000},{ref:"Gama media",ali:35000,staff:7000,ase:7000}],cond:"Mes cerrado. Corte 30 nov."}}
+      ,{id:15,marca:"SAMSUNG",tipo:"dia",estado:"aprobado",por:"César",d:{fecha:"2026-11-14",titulo:"Galaxy Black Days",aliados:"todos",pagos:[{ref:"Galaxy A36 5G",ali:18000,staff:4000,ase:9000}],cond:"Solo ventas del 14 de noviembre."}}
+      ,{id:16,marca:"XIAOMI",tipo:"oferta",estado:"aprobado",por:"Gina Bermúdez",d:{titulo:"Redmi 14C a $15.000 por venta",desde:"2026-11-27",hasta:"2026-11-28",aliados:"todos",pagos:[{ref:"Redmi 14C 128 GB",ali:0,staff:0,ase:15000}],cond:"Black Friday."}}
+    ],logos:{},next:17};
 }
 let db;try{db=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+if(!db){try{const o=JSON.parse(localStorage.getItem("tyt-incentivos-v5"));if(o){db=seed();db.pw=o.pw||{};db.logos=o.logos||{}}}catch(e){}}
 if(!db||!db.items)db=seed();db.logos=db.logos||{};db.pw=db.pw||{};
 const hash=async t=>{try{const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("tyt:"+t));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}catch(e){return"p:"+t}};
 const ukey=()=>S.user.role+"|"+S.user.name;
 const checkPw=async(k,p)=>db.pw[k]?(await hash(p))===db.pw[k]:p==="1234";
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}};
-const S={user:null,tab:null,lin:"Todas",rej:null,dia:null};
+const S={user:null,tab:null,lin:"Todas",rej:null,dia:null,mes:null};
+const meses=()=>{const set=new Set([hoyMes(),sigMes(hoyMes())]);db.items.forEach(i=>{const m=mesOf(i);if(m)set.add(m)});Object.keys(db.cal).forEach(k=>set.add(k.slice(0,7)));return[...set].sort().reverse()};
+const defMes=()=>{const ds=new Set(db.items.map(mesOf));const l=meses().filter(m=>ds.has(m));return l.includes(hoyMes())&&!ds.has(sigMes(hoyMes()))?hoyMes():(l[0]||hoyMes())};
+const enMes=it=>mesOf(it)===S.mes;
 const app=document.getElementById("app");
 const toast=t=>{const e=document.getElementById("toast");e.textContent=t;e.classList.add("on");clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove("on"),2200)};
 
@@ -153,10 +168,10 @@ function itemCard(it,mode){
 }
 function tabs(list){if(!list.some(t=>t[0]===S.tab))S.tab=list[0][0];return`<div class="tabs" role="tablist">${list.map(([k,l])=>`<button class="tab" role="tab" aria-selected="${S.tab===k}" data-tab="${k}">${l}</button>`).join("")}</div>`}
 function calendar(){
-  const first=new Date(2026,11,1),off=(first.getDay()+6)%7;let c="";
+  const[cy,cm]=S.mes.split("-").map(Number),first=new Date(cy,cm-1,1),off=(first.getDay()+6)%7;let c="";
   ["L","M","M","J","V","S","D"].forEach(x=>c+=`<div class="h">${x}</div>`);
   for(let i=0;i<off;i++)c+="<div></div>";
-  for(let d=1;d<=31;d++){const k=`2026-12-${String(d).padStart(2,"0")}`,m=db.cal[k];c+=`<div class="d${m?" on":""}">${d}${m?`<span>${nom(m)}</span>`:""}</div>`}
+  for(let d=1;d<=lastDay(S.mes);d++){const k=`${S.mes}-${String(d).padStart(2,"0")}`,m=db.cal[k];c+=`<div class="d${m?" on":""}">${d}${m?`<span>${nom(m)}</span>`:""}</div>`}
   return`<div class="cal">${c}</div>`;
 }
 const payRow=(r={})=>`<tr><td><input name="ref" value="${esc(r.ref)}" placeholder="Referencia o familia"></td><td><input name="ali" type="number" inputmode="numeric" value="${r.ali||""}" placeholder="0"></td><td><input name="staff" type="number" inputmode="numeric" value="${r.staff||""}" placeholder="0"></td><td><input name="ase" type="number" inputmode="numeric" value="${r.ase||""}" placeholder="0"></td><td><button type="button" class="btn sec sm" data-act="delrow" aria-label="Quitar fila">✕</button></td></tr>`;
@@ -165,9 +180,9 @@ const aliPick=()=>`<label class="chk" style="margin-top:14px"><input type="check
 
 function brandForm(){
   const m=S.user.name;
-  if(S.tab==="meta")return`<form class="card pn" id="f"><h2>Nueva meta volante</h2><p class="mut">Formato único de diciembre: objetivo, meta y categoría por aliado, pagos y condiciones.</p><div class="grid"><div><label for="obju">Objetivo total en unidades</label><input id="obju" type="number" inputmode="numeric" min="0" placeholder="0"></div><div><label for="objm">Objetivo total en millones</label><input id="objm" type="number" inputmode="decimal" step="any" min="0" placeholder="0"></div><div><label for="d1">Desde</label><input id="d1" type="date" value="2026-12-01" required></div><div><label for="d2">Hasta</label><input id="d2" type="date" value="2026-12-31" required></div></div><h3 style="margin:18px 0 8px">Meta por aliado</h3><table class="stack"><thead><tr><th>Aliado</th><th>Unidades</th><th>Millones</th><th>Categoría</th></tr></thead><tbody>${ALIADOS.map((a,i)=>`<tr><td>${esc(a)}</td><td><input type="number" inputmode="numeric" min="0" data-u="${i}" placeholder="0"></td><td><input type="number" inputmode="decimal" step="any" min="0" data-m="${i}" placeholder="0"></td><td><select data-cat="${i}"><option>A</option><option>B</option><option>C</option></select></td></tr>`).join("")}</tbody></table><p class="note">Llena unidades, millones o las dos, según la meta de la marca. Millones en millones de pesos (ej.: 85,5 = $85.500.000). Un aliado sin unidades ni millones no verá esta meta volante.</p>${payEditor()}<label for="cond" style="margin-top:16px">Condiciones (corte, fecha de pago, con o sin IVA)</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar a aprobación</button></form>`;
-  if(S.tab==="dia"){const days=Object.entries(db.cal).filter(([,b])=>b===m).map(([k])=>k).sort();
-    if(!days.length)return`<div class="empty">TYT todavía no te ha asignado días de marca en diciembre. Cuando el jefe de canal te asigne días, aparecerán aquí.</div>`;
+  if(S.tab==="meta")return`<form class="card pn" id="f"><h2>Nueva meta volante de ${mesCorto(S.mes)}</h2><p class="mut">Formato único: objetivo, meta y categoría por aliado, pagos y condiciones.</p><div class="grid"><div><label for="obju">Objetivo total en unidades</label><input id="obju" type="number" inputmode="numeric" min="0" placeholder="0"></div><div><label for="objm">Objetivo total en millones</label><input id="objm" type="number" inputmode="decimal" step="any" min="0" placeholder="0"></div><div><label for="d1">Desde</label><input id="d1" type="date" value="${S.mes}-01" required></div><div><label for="d2">Hasta</label><input id="d2" type="date" value="${S.mes}-${lastDay(S.mes)}" required></div></div><h3 style="margin:18px 0 8px">Meta por aliado</h3><table class="stack"><thead><tr><th>Aliado</th><th>Unidades</th><th>Millones</th><th>Categoría</th></tr></thead><tbody>${ALIADOS.map((a,i)=>`<tr><td>${esc(a)}</td><td><input type="number" inputmode="numeric" min="0" data-u="${i}" placeholder="0"></td><td><input type="number" inputmode="decimal" step="any" min="0" data-m="${i}" placeholder="0"></td><td><select data-cat="${i}"><option>A</option><option>B</option><option>C</option></select></td></tr>`).join("")}</tbody></table><p class="note">Llena unidades, millones o las dos, según la meta de la marca. Millones en millones de pesos (ej.: 85,5 = $85.500.000). Un aliado sin unidades ni millones no verá esta meta volante.</p>${payEditor()}<label for="cond" style="margin-top:16px">Condiciones (corte, fecha de pago, con o sin IVA)</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar a aprobación</button></form>`;
+  if(S.tab==="dia"){const days=Object.entries(db.cal).filter(([k,b])=>b===m&&k.startsWith(S.mes)).map(([k])=>k).sort();
+    if(!days.length)return`<div class="empty">TYT todavía no te ha asignado días de marca en ${mesCorto(S.mes)}. Cuando el jefe de canal te asigne días, aparecerán aquí.</div>`;
     if(!days.includes(S.dia))S.dia=days[0];
     const st=k=>{const l=db.items.filter(i=>i.marca===m&&i.tipo==="dia"&&i.d.fecha===k);if(!l.length)return"Sin concurso";const c=e=>l.filter(i=>i.estado===e).length;return[c("aprobado")&&c("aprobado")+" aprobado",c("pendiente")&&c("pendiente")+" pendiente",c("rechazado")&&c("rechazado")+" rechazado"].filter(Boolean).join(" · ")};
     return`<div class="card"><h2>Tus días de marca</h2><p class="mut">Elige el día y monta un concurso distinto para cada uno.</p><div class="days">${days.map(k=>`<button type="button" class="day${S.dia===k?" on":""}" data-day="${k}"><b>${fdate(k)}</b><span>${st(k)}</span></button>`).join("")}</div></div><form class="card pn" id="f"><h2>Concurso del ${fdate(S.dia)}</h2><p class="mut">Este concurso aplica solo para ese día.</p><input type="hidden" id="fecha" value="${S.dia}"><label for="tit">Nombre del concurso</label><input id="tit" required placeholder="Ej.: ${nom(m)} Day">${aliPick()}${payEditor()}<label for="cond" style="margin-top:16px">Condiciones</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar concurso del ${fdate(S.dia)} a aprobación</button></form>`}
@@ -175,23 +190,23 @@ function brandForm(){
 }
 function viewBrand(){
   if(!["meta","dia","oferta"].includes(S.tab))S.tab="meta";
-  if(S.tab==="dia"){const ds=Object.entries(db.cal).filter(([,b])=>b===S.user.name).map(([k])=>k).sort();if(!ds.includes(S.dia))S.dia=ds[0]||null}
-  const mine=db.items.filter(i=>i.marca===S.user.name&&i.tipo===S.tab&&(S.tab!=="dia"||i.d.fecha===S.dia)).sort((a,b)=>b.id-a.id);
+  if(S.tab==="dia"){const ds=Object.entries(db.cal).filter(([k,b])=>b===S.user.name&&k.startsWith(S.mes)).map(([k])=>k).sort();if(!ds.includes(S.dia))S.dia=ds[0]||null}
+  const mine=db.items.filter(i=>enMes(i)&&i.marca===S.user.name&&i.tipo===S.tab&&(S.tab!=="dia"||i.d.fecha===S.dia)).sort((a,b)=>b.id-a.id);
   const lg=`<div class="card row" style="justify-content:space-between"><div class="row">${logo(S.user.name,1)}<div><h3>${nom(S.user.name)}</h3><span class="mut">${db.logos[S.user.name]?"Este logo lo ven los jefes y los aliados.":"Sube el logo de tu marca (PNG o JPG)."}</span></div></div><label class="btn sec sm" style="margin:0;color:var(--ink)">${db.logos[S.user.name]?"Cambiar logo":"Subir logo"}<input type="file" id="logoin" accept="image/*" hidden></label></div>`;
   return lg+tabs([["meta","Meta volante"],["dia","Días de marca"],["oferta","Ofertas"]])+(()=>{const f=brandForm();return f})()+`<h2 style="margin:22px 0 10px">${S.tab==="dia"&&S.dia?"Mis concursos del "+fdate(S.dia):"Mis envíos"}</h2>`+(mine.length?mine.map(i=>itemCard(i,"brand")).join(""):`<div class="empty">Aún no has enviado ${TIPOS[S.tab].toLowerCase()}.</div>`);
 }
 function viewJefe(){
-  const cnt=e=>db.items.filter(i=>i.estado===e).length;
+  const cnt=e=>db.items.filter(i=>enMes(i)&&i.estado===e).length;
   let h=tabs([["pendiente",`Pendientes (${cnt("pendiente")})`],["aprobado",`Aprobados (${cnt("aprobado")})`],["rechazado",`Rechazados (${cnt("rechazado")})`],["cal","Calendario"],["usr","Usuarios"]]);
   if(S.tab==="usr"){const g=(t,arr,f)=>`<optgroup label="${t}">${arr.map(x=>`<option value="${f}|${esc(x)}">${f==="brand"?nom(x):esc(x)} ${db.pw[f+"|"+x]?"· propia":"· inicial"}</option>`).join("")}</optgroup>`;return h+`<form class="card pn" id="frst"><h2>Restablecer contraseña</h2><p class="mut">Si una marca, un aliado o el otro jefe olvida su contraseña, vuelve a quedar en 1234 y debe cambiarla al entrar.</p><label for="ru">Usuario</label><select id="ru">${g("Marcas",MARCAS,"brand")}${g("Jefes de canal",JEFES,"jefe")}${g("Aliados",ALIADOS,"ali")}</select><button class="btn" style="margin-top:12px">Restablecer a 1234</button></form>`}
-  if(S.tab==="cal")return h+`<div class="card"><h2>Días de marca · diciembre</h2><p class="note" style="margin-bottom:10px">Calendario de ejemplo mientras llega el real.</p>${calendar()}</div><form class="card pn" id="fcal"><h3>Asignar o quitar un día</h3><div class="grid" style="margin-top:8px"><div><label for="cd">Día</label><input id="cd" type="date" min="2026-12-01" max="2026-12-31" value="2026-12-01"></div><div><label for="cm">Marca</label><select id="cm"><option value="">— Sin marca —</option>${MARCAS.map(m=>`<option value="${m}">${nom(m)}</option>`).join("")}</select></div></div><button class="btn" style="margin-top:12px">Guardar día</button></form>`;
-  const l=db.items.filter(i=>i.estado===S.tab).sort((a,b)=>b.id-a.id);
+  if(S.tab==="cal")return h+`<div class="card"><h2>Días de marca · ${mesCorto(S.mes)}</h2><p class="note" style="margin-bottom:10px">Calendario de ejemplo mientras llega el real.</p>${calendar()}</div><form class="card pn" id="fcal"><h3>Asignar o quitar un día</h3><div class="grid" style="margin-top:8px"><div><label for="cd">Día</label><input id="cd" type="date" min="${S.mes}-01" max="${S.mes}-${lastDay(S.mes)}" value="${S.mes}-01"></div><div><label for="cm">Marca</label><select id="cm"><option value="">— Sin marca —</option>${MARCAS.map(m=>`<option value="${m}">${nom(m)}</option>`).join("")}</select></div></div><button class="btn" style="margin-top:12px">Guardar día</button></form>`;
+  const l=db.items.filter(i=>enMes(i)&&i.estado===S.tab).sort((a,b)=>b.id-a.id);
   return h+(l.length?l.map(i=>itemCard(i,"jefe")).join(""):`<div class="empty">No hay incentivos ${S.tab==="pendiente"?"pendientes por revisar":S.tab+"s"}.</div>`);
 }
 function viewAli(){
   const a=S.user.name;
-  const vis=db.items.filter(i=>i.estado==="aprobado"&&forAli(i,a)&&(S.lin==="Todas"||linea(i.marca)===S.lin));
-  let h=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><h1>Mis incentivos de diciembre</h1><div class="tabs" style="margin:0">${["Todas","Terminales","Tecnología"].map(x=>`<button class="tab" aria-selected="${S.lin===x}" data-lin="${x}">${x}</button>`).join("")}</div></div>`;
+  const vis=db.items.filter(i=>enMes(i)&&i.estado==="aprobado"&&forAli(i,a)&&(S.lin==="Todas"||linea(i.marca)===S.lin));
+  let h=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><h1>Mis incentivos de ${mesCorto(S.mes)}</h1><div class="tabs" style="margin:0">${["Todas","Terminales","Tecnología"].map(x=>`<button class="tab" aria-selected="${S.lin===x}" data-lin="${x}">${x}</button>`).join("")}</div></div>`;
   h+=tabs([["meta","Meta volante"],["dia","Días de marca"],["oferta","Ofertas"]]);
   const l=vis.filter(i=>i.tipo===S.tab).sort((x,y)=>S.tab==="dia"?x.d.fecha.localeCompare(y.d.fecha):0);
   if(S.tab==="meta"&&l.length){const tu=l.reduce((s,i)=>s+mU(i.d.metas[a]),0),tm=l.reduce((s,i)=>s+mM(i.d.metas[a]),0);
@@ -209,11 +224,13 @@ function pwPanel(){
   if(!db.pw[ukey()])return`<div class="card row" style="justify-content:space-between;background:var(--am);border-color:transparent"><span style="color:var(--ami);font-weight:600">Estás usando la contraseña inicial 1234. Cámbiala por una propia.</span><button class="btn sm" data-act="pw">Cambiar ahora</button></div>`;
   return"";
 }
+function mesBar(){return`<div class="mesbar"><label for="mes">Mes</label><select id="mes">${meses().map(m=>`<option value="${m}"${m===S.mes?" selected":""}>${mesLabel(m)}${m===hoyMes()?" (actual)":""}${m<hoyMes()?" · cerrado":""}</option>`).join("")}</select></div>`}
 function render(){
+  if(!S.mes)S.mes=defMes();
   if(!S.user){app.innerHTML=viewLogin();return}
   const r={brand:"Marca",jefe:"Jefe de canal",ali:"Aliado"}[S.user.role];
   const n=S.user.role==="brand"?nom(S.user.name):S.user.name;
-  app.innerHTML=`<div class="top"><b>Incentivos TYT</b><div class="who"><span>${r}: <b>${esc(n)}</b></span><button class="btn sm" data-act="pw">Contraseña</button><button class="btn sm" data-act="out">Salir</button></div></div><div class="wrap">${pwPanel()}${S.user.role==="brand"?viewBrand():S.user.role==="jefe"?viewJefe():viewAli()}</div>`;
+  app.innerHTML=`<div class="top"><b>Incentivos TYT</b><div class="who"><span>${r}: <b>${esc(n)}</b></span><button class="btn sm" data-act="pw">Contraseña</button><button class="btn sm" data-act="out">Salir</button></div></div><div class="wrap">${mesBar()}${pwPanel()}${S.user.role==="brand"?viewBrand():S.user.role==="jefe"?viewJefe():viewAli()}</div>`;
 }
 const readPays=()=>[...document.querySelectorAll("#pays tbody tr")].map(tr=>({ref:tr.querySelector("[name=ref]").value.trim(),ali:+tr.querySelector("[name=ali]").value||0,staff:+tr.querySelector("[name=staff]").value||0,ase:+tr.querySelector("[name=ase]").value||0})).filter(r=>r.ref);
 const readAlis=()=>document.getElementById("todos").checked?"todos":[...document.querySelectorAll("#alis input:checked")].map(i=>i.value);
@@ -254,6 +271,7 @@ app.addEventListener("click",e=>{
   else if(a==="rej-ok"){it.estado="rechazado";it.por=S.user.name;it.coment=v("rc").trim()||"Sin comentario";S.rej=null;save();render();toast("Rechazado. La marca verá el comentario.")}
 });
 app.addEventListener("change",e=>{
+  if(e.target.id==="mes"){S.mes=e.target.value;S.dia=null;S.rej=null;render();return}
 
   if(e.target.id==="logoin"){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,160/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext("2d").drawImage(im,0,0,c.width,c.height);db.logos[S.user.name]=c.toDataURL("image/png");save();render();toast("Logo actualizado")};im.onerror=()=>toast("No se pudo leer la imagen");im.src=r.result};r.readAsDataURL(f);return}if(e.target.id==="todos")document.getElementById("alis").hidden=e.target.checked});
 render();
