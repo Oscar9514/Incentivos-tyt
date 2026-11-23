@@ -7,43 +7,30 @@ service cloud.firestore {
     function isJefe() { return signed() && em() in ['j.gina@incentivos-tyt.app', 'j.cesar@incentivos-tyt.app']; }
     function marcas() { return ['honor','huawei','kalley','motorola','oppo','samsung','tcl','tecno','vivo','xiaomi','zte','tecnologia']; }
     function aliados() { return ['altycom-barranquilla','conexiones-digitales','conexiones-digitales-barranquilla','contactmaster-bpo-manizales','cos-barranquilla','gnp-cali','voicetech-medellin','bentoint','cos-bogota','one-contact-bogota','vector-bogota','asiste-ing','gnp','arcos-bogota','atento-bogota']; }
+    function isEsp() { return signed() && em() in ['e.correa-ramirez-oscar-ivan@incentivos-tyt.app', 'e.vargas-martinez-jorge-andres@incentivos-tyt.app', 'e.velasquez-moreno-john-fernando@incentivos-tyt.app', 'e.martinez-poveda-carlos-andres@incentivos-tyt.app', 'e.zapata-gonzalez-vladimir@incentivos-tyt.app']; }
     function isMarca(ms) { return signed() && ms in marcas() && em() == 'm.' + ms + '@incentivos-tyt.app'; }
     function isAliado(as) { return signed() && as in aliados() && em() == 'a.' + as + '@incentivos-tyt.app'; }
-    function isAsesor() { return signed() && em().matches('^[0-9]{6,10}@asesor[.]incentivos-tyt[.]app$'); }
-    function ced() { return em().split('@')[0]; }
-    function miAliado() { return get(/databases/$(database)/documents/asesores/$(ced())).data.as; }
 
     // Incentivos que suben las marcas (completos, con pagos de aliado, staff y asesor)
     match /items/{id} {
-      allow read: if isJefe() || isMarca(resource.data.ms);
+      allow read: if isJefe() || isEsp() || isMarca(resource.data.ms);
       allow create: if isMarca(request.resource.data.ms)
                     && request.resource.data.estado == 'pendiente'
                     && request.resource.data.mes is string;
-      allow update: if isJefe();
+      // El jefe aprueba o rechaza; la marca solo puede corregir y reenviar lo rechazado
+      allow update: if isJefe()
+                    || (isMarca(resource.data.ms)
+                        && resource.data.estado == 'rechazado'
+                        && request.resource.data.estado == 'pendiente'
+                        && request.resource.data.ms == resource.data.ms
+                        && request.resource.data.marca == resource.data.marca
+                        && request.resource.data.tipo == resource.data.tipo);
     }
 
     // Copia publicada para cada aliado (solo su meta)
     match /pub_ali/{id} {
       allow read: if isJefe() || isAliado(resource.data.as);
       allow write: if isJefe();
-    }
-
-    // Copia publicada para asesores (solo el pago al asesor)
-    match /pub_ase/{id} {
-      allow read: if isJefe()
-                  || (isAsesor() && exists(/databases/$(database)/documents/asesores/$(ced()))
-                      && miAliado() == resource.data.as);
-      allow write: if isJefe();
-    }
-
-    // Ficha de cada asesor (el id es la cédula)
-    match /asesores/{c} {
-      allow read: if isJefe() || (isAsesor() && ced() == c);
-      allow create: if isAsesor() && ced() == c
-                    && request.resource.data.as in aliados()
-                    && request.resource.data.nombre is string
-                    && request.resource.data.nombre.size() <= 80;
-      allow delete: if isJefe();
     }
 
     // Calendario de días de marca y logos

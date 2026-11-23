@@ -1,6 +1,6 @@
 # Plataforma de incentivos TYT
 
-Plataforma de incentivos de marcas para aliados y asesores: metas volantes, días de marca y ofertas específicas. Los datos se guardan en Firebase (proyecto `incentivos-tyt`, plan gratuito Spark).
+Plataforma de incentivos de marcas para aliados: metas volantes, días de marca y ofertas específicas. Los datos se guardan en Firebase (proyecto `incentivos-tyt`, plan gratuito Spark).
 
 ## Archivos
 
@@ -21,12 +21,12 @@ Plataforma de incentivos de marcas para aliados y asesores: metas volantes, día
 ## Cómo ingresa cada perfil
 
 - Marcas, jefes y aliados: eligen su nombre y escriben la contraseña que les entregó el jefe.
-- Asesores: se registran solos con su cédula, nombre, aliado y una contraseña propia.
+- Especialistas (5): solo consultan. Eligen un aliado, ven sus incentivos aprobados y descargan PDF.
 
 ## Si alguien olvida su contraseña
 
-En Firebase, Authentication > Usuarios, elimina su usuario. Marcas y aliados: luego el jefe pulsa "Crear usuarios que falten". Asesores: borra también su ficha en Firestore > asesores y pídele que se registre de nuevo.
+En Firebase, Authentication > Usuarios, elimina su usuario. Luego el jefe pulsa "Crear usuarios que falten".
 
 ## Correos internos
 
-Los usuarios no usan correo, pero Firebase los identifica así: marcas `m.oppo@incentivos-tyt.app`, aliados `a.cos-bogota@incentivos-tyt.app`, jefes `j.gina@` y `j.cesar@incentivos-tyt.app`, asesores `cédula@asesor.incentivos-tyt.app`.
+Los usuarios no usan correo, pero Firebase los identifica así: marcas `m.oppo@incentivos-tyt.app`, aliados `a.cos-bogota@incentivos-tyt.app`, jefes `j.gina@` y `j.cesar@incentivos-tyt.app`, especialistas `e.zapata-gonzalez-vladimir@incentivos-tyt.app`.
