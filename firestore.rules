@@ -57,6 +57,14 @@ service cloud.firestore {
                    && request.resource.data.data.size() < 300000;
     }
 
+    // Imágenes de las ofertas
+    match /imgs/{id} {
+      allow read: if signed();
+      allow create: if isMarca(request.resource.data.ms) && request.resource.data.data is string
+                    && request.resource.data.data.size() < 1000000;
+      allow delete: if isJefe();
+    }
+
     // Marca personal: si el usuario ya cambió su contraseña
     match /perfil/{uid} {
       allow read, write: if signed() && request.auth.uid == uid;

@@ -61,6 +61,7 @@ td input,td select{min-height:40px;padding:7px 9px}
 .cal button.d{font:inherit;font-size:12px;text-align:left;background:var(--bg);color:var(--ink);cursor:pointer;display:block;width:100%}.cal .d.on{background:var(--em);color:#fff;border-color:var(--em)}.cal .d.sel{outline:3px solid var(--ink);outline-offset:1px}
 .cal .d span{display:block;font-weight:800;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;margin-top:2px}
 .login{max-width:440px;margin:6vh auto 0}
+.ofimg{display:block;width:100%;max-height:420px;object-fit:contain;border-radius:10px;margin:10px 0;background:var(--pn)}
 .mesbar{display:flex;align-items:center;gap:10px;margin:0 0 16px}.mesbar label{margin:0;color:var(--ink);font-size:15px}.mesbar select{width:auto;min-width:220px;font-weight:700}
 .days{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px}.day{border:2px solid var(--ln);background:var(--bg);color:var(--ink);border-radius:12px;padding:12px;text-align:left;cursor:pointer;font:inherit;min-height:44px}.day b{display:block;font-size:17px}.day b::first-letter{text-transform:uppercase}.day span{font-size:13px;color:var(--mut)}.day.on{border-color:var(--em);background:var(--pk)}.day.on span{color:var(--pki)}
 .logo{width:36px;height:36px;border-radius:8px;object-fit:contain;background:#fff;border:1px solid var(--ln);display:inline-grid;place-items:center;font-weight:800;font-size:13px;color:#DA291C;flex:none}.logo.lg{width:56px;height:56px;font-size:18px}
@@ -123,13 +124,15 @@ const lastDay=k=>{const[y,m]=k.split("-").map(Number);return new Date(y,m,0).get
 const ym=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
 const hoyMes=()=>ym(new Date());
 const hoyISO=()=>{const t=new Date();return ym(t)+"-"+String(t.getDate()).padStart(2,"0")};
-const meses=()=>{const t=new Date(),o=[];for(let i=1;i>=-12;i--)o.push(ym(new Date(t.getFullYear(),t.getMonth()+i,1)));return o};
+const MES0="2026-12";
+const meses=()=>{const t=new Date(),fin=ym(new Date(t.getFullYear(),t.getMonth()+1,1)),o=[];let[y,m]=MES0.split("-").map(Number);for(let k=MES0;k<=fin;){o.push(k);m++;if(m>12){m=1;y++}k=y+"-"+String(m).padStart(2,"0")}return o.reverse()};
+const mesInicial=()=>hoyMes()<MES0?MES0:hoyMes();
 const ts=i=>i.creado?.seconds??9e12;
 const onDay=(it,k)=>it.tipo==="dia"?it.d.fecha===k:it.tipo==="oferta"?(it.d.desde<=k&&k<=(it.d.hasta||it.d.desde)):false;
 const hasMetas=d=>Object.values(d?.metas||{}).some(hasM);
 
-const db={items:[],cal:{},logos:{},asesores:{},perfil:null,me:null};
-const S={fM:"",fD:"",calDay:"",user:null,tab:null,lin:"Todas",rej:null,dia:null,mes:hoyMes(),login:"std",pw:false,busy:false,creados:null,registering:false};
+const db={imgs:{},items:[],cal:{},logos:{},asesores:{},perfil:null,me:null};
+const S={ofImg:"",fM:"",fD:"",calDay:"",user:null,tab:null,lin:"Todas",rej:null,dia:null,mes:mesInicial(),login:"std",pw:false,busy:false,creados:null,registering:false};
 const enMes=it=>it.mes===S.mes;
 const app=document.getElementById("app");
 const toast=t=>{const e=document.getElementById("toast");e.textContent=t;e.classList.add("on");clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove("on"),3200)};
@@ -150,6 +153,8 @@ async function loadMonth(){
   else if(r==="ali")q=query(collection(fs,"pub_ali"),where("as","==",slug(S.user.name)),where("mes","==",S.mes));
   else{if(!db.me){db.items=[];return}q=query(collection(fs,"pub_ase"),where("as","==",db.me.as),where("mes","==",S.mes))}
   const s=await getDocs(q);db.items=s.docs.map(d=>({id:d.id,...d.data()}));
+  const faltan=[...new Set(db.items.map(i=>i.d?.img).filter(x=>x&&!db.imgs[x]))];
+  await Promise.all(faltan.map(async id=>{try{const g=await getDoc(doc(fs,"imgs",id));if(g.exists())db.imgs[id]=g.data().data}catch(e){console.warn(e)}}));
   if(r==="ali"||r==="ase")db.items.forEach(i=>i.estado="aprobado");
   if(r==="jefe"){const a=await getDocs(collection(fs,"asesores"));db.asesores={};a.forEach(d=>db.asesores[d.id]=d.data())}
 }
@@ -169,13 +174,13 @@ async function reload(){await loadCommon();await loadMonth();render()}
 
 async function aprobar(it){
   const b=writeBatch(fs);
-  b.update(doc(fs,"items",it.id),{estado:"aprobado",por:S.user.name,coment:""});
+  b.update(doc(fs,"items",it.id),{estado:"aprobado",por:S.user.name,coment:"",aprobadoEn:serverTimestamp()});
   const targets=it.tipo==="meta"?ALIADOS.filter(a=>hasM(it.d.metas?.[a])):(it.d.aliados==="todos"?ALIADOS:it.d.aliados);
   for(const a of targets){
     const as=slug(a),id=it.id+"_"+as,base={as,ms:it.ms,marca:it.marca,tipo:it.tipo,mes:it.mes,creado:serverTimestamp()};
     const dA={...it.d};const my=it.d.metas?.[a];dA.metas=hasM(my)?{[a]:my}:{};delete dA.objU;delete dA.objM;if(it.tipo!=="meta")dA.aliados=[a];
     b.set(doc(fs,"pub_ali",id),{...base,d:dA});
-    const dS={tec:it.d.tec||"",titulo:it.d.titulo||"",fecha:it.d.fecha||"",desde:it.d.desde||"",hasta:it.d.hasta||"",cond:it.d.cond||"",pagos:(it.d.pagos||[]).filter(p=>p.ase>0).map(p=>({ref:p.ref,ase:p.ase})),metas:{[a]:{und:1,mill:0}},aliados:[a],conMeta:hasM(it.d.metas?.[a])};
+    const dS={img:it.d.img||"",tec:it.d.tec||"",titulo:it.d.titulo||"",fecha:it.d.fecha||"",desde:it.d.desde||"",hasta:it.d.hasta||"",cond:it.d.cond||"",pagos:(it.d.pagos||[]).filter(p=>p.ase>0).map(p=>({ref:p.ref,ase:p.ase})),metas:{[a]:{und:1,mill:0}},aliados:[a],conMeta:hasM(it.d.metas?.[a])};
     b.set(doc(fs,"pub_ase",id),{...base,d:dS});
   }
   await b.commit();
@@ -193,6 +198,37 @@ async function crearUsuarios(){
   S.creados.done=true;render();
 }
 
+function achicar(file,max,lim){return new Promise((ok,ko)=>{const r=new FileReader();r.onerror=ko;r.onload=()=>{const im=new Image();im.onerror=ko;im.onload=()=>{let w=im.width,h=im.height,k=Math.min(1,max/Math.max(w,h)),q=.8,data="";for(let i=0;i<6;i++){const c=document.createElement("canvas");c.width=Math.round(w*k);c.height=Math.round(h*k);const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);data=c.toDataURL("image/jpeg",q);if(data.length<lim)return ok(data);q-=.1;k*=.85}ko(new Error("grande"))};im.src=r.result};r.readAsDataURL(file)})}
+function keepForm(fn){const f=document.getElementById("f");const vals=f?[...f.querySelectorAll("input:not([type=file]),select,textarea")].map(x=>x.type==="checkbox"?x.checked:x.value):null;fn();const g=document.getElementById("f");if(vals&&g){const els=[...g.querySelectorAll("input:not([type=file]),select,textarea")];els.forEach((x,i)=>{if(i<vals.length){if(x.type==="checkbox")x.checked=vals[i];else x.value=vals[i]}});const t=document.getElementById("todos");if(t)document.getElementById("alis").hidden=t.checked}}
+const fechaHora=t=>t?.seconds?new Date(t.seconds*1000).toLocaleString("es-CO",{day:"numeric",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit"}):"";
+function abrirPDF(it){
+  const w=window.open("","_blank");if(!w){toast("Tu navegador bloqueó la ventana. Permite las ventanas emergentes para esta página.");return}
+  const d=it.d,ent=ALIADOS.filter(a=>hasM(d.metas?.[a])),tu=ent.reduce((s,a)=>s+mU(d.metas[a]),0),tm=ent.reduce((s,a)=>s+mM(d.metas[a]),0);
+  const vig=it.tipo==="dia"?fdate(d.fecha):fdate(d.desde)+" – "+fdate(d.hasta);
+  const titulo=`${TIPOS[it.tipo]} ${nomIt(it)} ${mesLabel(it.mes)}`;
+  const fila=(k,v)=>v?`<tr><th>${k}</th><td>${v}</td></tr>`:"";
+  const metas=ent.length?`<h2>Meta por aliado</h2><table class="g"><thead><tr><th>Aliado</th><th class="n">Unidades</th><th class="n">Millones</th><th>Categoría</th></tr></thead><tbody>${ent.map(a=>{const m=d.metas[a];return`<tr><td>${esc(a)}</td><td class="n">${mU(m)?num(mU(m)):""}</td><td class="n">${mM(m)?"$"+num(mM(m))+" M":""}</td><td>${esc(m.cat)}</td></tr>`}).join("")}</tbody><tfoot><tr><th>Total por aliados</th><th class="n">${tu?num(tu):""}</th><th class="n">${tm?"$"+num(tm)+" M":""}</th><th></th></tr></tfoot></table>`:"";
+  const pagos=`<h2>Pago por referencia</h2><table class="g"><thead><tr><th>Referencia</th><th class="n">Pago aliado</th><th class="n">Pago staff</th><th class="n">Pago asesor</th></tr></thead><tbody>${(d.pagos||[]).map(p=>`<tr><td>${esc(p.ref)}</td><td class="n">${money(p.ali)}</td><td class="n">${money(p.staff)}</td><td class="n">${money(p.ase)}</td></tr>`).join("")}</tbody></table>`;
+  const img=d.img&&db.imgs[d.img]?`<h2>Imagen de la oferta</h2><img src="${db.imgs[d.img]}" alt="">`:"";
+  const html=`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>${esc(titulo)}</title><style>
+  @page{size:letter;margin:16mm}*{box-sizing:border-box}body{font:11pt/1.45 Arial,Helvetica,sans-serif;color:#1a1a1a;margin:0;padding:24px}
+  .bar{display:flex;gap:10px;justify-content:flex-end;margin-bottom:16px}.bar button{font:600 14px Arial;padding:10px 16px;border-radius:8px;border:0;background:#DA291C;color:#fff;cursor:pointer}
+  header{border-top:8px solid #DA291C;padding-top:12px;display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+  h1{font-size:20pt;margin:4px 0 2px}h2{font-size:12.5pt;margin:20px 0 6px;color:#A51E14}.k{color:#5f5f5f;font-size:10pt}
+  .ok{border:2px solid #1b6b38;color:#1b6b38;border-radius:8px;padding:8px 12px;font-weight:700;text-align:center;white-space:nowrap}
+  table{width:100%;border-collapse:collapse}table.i th{width:30%;text-align:left;color:#5f5f5f;font-weight:600;padding:5px 8px 5px 0;vertical-align:top}table.i td{padding:5px 0}
+  table.g th,table.g td{border:1px solid #ddd;padding:6px 8px;text-align:left}table.g thead th,table.g tfoot th{background:#f3f3f3}.n{text-align:right!important;white-space:nowrap}
+  .cond{white-space:pre-wrap;border:1px solid #ddd;border-radius:8px;padding:10px}img{max-width:100%;max-height:420px;border:1px solid #ddd;border-radius:8px}
+  footer{margin-top:24px;border-top:1px solid #ddd;padding-top:8px;color:#5f5f5f;font-size:9pt}tr{page-break-inside:avoid}
+  @media print{.bar{display:none}body{padding:0}}</style></head><body>
+  <div class="bar"><button onclick="window.print()">Guardar como PDF</button></div>
+  <header><div><div class="k">Plataforma de incentivos TYT</div><h1>${esc(TIPOS[it.tipo])} · ${esc(nomIt(it))}</h1><div class="k">${esc(mesLabel(it.mes))}${d.titulo?" · "+esc(d.titulo):""}</div></div><div class="ok">APROBADO<br><span style="font-weight:400">por ${esc(it.por||"")}</span>${it.aprobadoEn?`<br><span style="font-weight:400;font-size:9pt">${esc(fechaHora(it.aprobadoEn))}</span>`:""}</div></header>
+  <h2>Datos generales</h2><table class="i">${fila("Marca",esc(nomIt(it)))}${fila("Línea",linea(it.marca))}${fila("Tipo de incentivo",TIPOS[it.tipo])}${fila("Nombre",esc(d.titulo||""))}${fila(it.tipo==="dia"?"Día":"Vigencia",vig)}${fila("Objetivo total",d.objU||d.objM?ub(d.objU,d.objM):"")}${it.tipo!=="meta"?fila("Aplica a",d.aliados==="todos"?"Todos los aliados":esc((d.aliados||[]).join(", "))):""}${fila("Enviado el",esc(fechaHora(it.creado)))}${fila("Aprobado por",esc(it.por||""))}${fila("Fecha de aprobación",esc(fechaHora(it.aprobadoEn)))}</table>
+  ${metas}${pagos}${img}<h2>Condiciones</h2><div class="cond">${esc(d.cond||"Sin condiciones registradas.")}</div>
+  <footer>Documento generado desde la plataforma de incentivos TYT el ${esc(new Date().toLocaleString("es-CO"))}. Registro ${esc(it.id)}.</footer>
+  <script>window.onload=()=>setTimeout(()=>window.print(),500)<\/script></body></html>`;
+  w.document.open();w.document.write(html);w.document.close();
+}
 /* ---------- vistas ---------- */
 const logo=(m,big)=>db.logos[m]?`<img class="logo${big?" lg":""}" src="${db.logos[m]}" alt="Logo ${esc(nom(m))}">`:`<span class="logo${big?" lg":""}" aria-hidden="true">${esc(nom(m).slice(0,2).toUpperCase())}</span>`;
 const forAli=(it,a)=>it.tipo==="meta"?hasM(it.d.metas?.[a]):(it.d.aliados==="todos"||(it.d.aliados||[]).includes(a));
@@ -208,6 +244,7 @@ function detail(it,ali){
   if(it.tipo==="meta")h+=metaBlock(d,ali);
   else{h+=`<p style="margin:6px 0"><b>${esc(d.titulo)}</b><br><span class="mut">${it.tipo==="dia"?fdate(d.fecha):fdate(d.desde)+" – "+fdate(d.hasta)}${ali?"":" · "+(d.aliados==="todos"?"Todos los aliados":esc((d.aliados||[]).join(", ")))}</span></p>`;
     if(it.tipo==="dia")h+=metaBlock(d,ali,"Tu meta del día")}
+  if(d.img&&db.imgs[d.img])h+=`<img class="ofimg" src="${db.imgs[d.img]}" alt="Imagen de la oferta">`;
   h+=payTable(d.pagos||[],["ali","staff","ase"]);
   if(d.cond)h+=`<p class="note"><b>Condiciones:</b> ${esc(d.cond)}</p>`;
   return h;
@@ -216,6 +253,7 @@ function itemCard(it,mode){
   let actions="";
   if(mode==="jefe"&&it.estado==="pendiente")actions=S.rej===it.id?`<div style="margin-top:12px"><label for="rc">Motivo del rechazo</label><textarea id="rc" placeholder="Qué debe corregir la marca"></textarea><div class="row" style="margin-top:8px"><button class="btn no" data-act="rej-ok" data-id="${it.id}">Confirmar rechazo</button><button class="btn sec" data-act="rej-x">Cancelar</button></div></div>`:`<div class="row" style="margin-top:12px"><button class="btn" data-act="ok" data-id="${it.id}">✓ Aprobar y publicar</button><button class="btn no" data-act="rej" data-id="${it.id}">Rechazar</button></div>`;
   const st=it.estado==="aprobado"&&it.por?` por ${esc(it.por)}`:"";
+  if((mode==="brand"||mode==="jefe")&&it.estado==="aprobado")actions+=`<div class="row" style="margin-top:12px"><button class="btn sec sm" data-act="pdf" data-id="${it.id}">Descargar PDF del aprobado</button></div>`;
   return`<div class="card"><div class="row" style="justify-content:space-between"><div class="row">${logo(it.marca)}<h3>${esc(nomIt(it))} · ${TIPOS[it.tipo]}</h3></div>${mode==="ali"?`<span class="tag">${linea(it.marca)}</span>`:`<span class="pill p-${it.estado}">${it.estado[0].toUpperCase()+it.estado.slice(1)}${st}</span>`}</div>${it.coment?`<p class="note" style="color:var(--pki)"><b>Comentario del jefe:</b> ${esc(it.coment)}</p>`:""}${detail(it,mode==="ali"?S.user.name:null)}${actions}</div>`;
 }
 function tabs(list){if(!list.some(t=>t[0]===S.tab))S.tab=list[0][0];return`<div class="tabs" role="tablist">${list.map(([k,l])=>`<button class="tab" role="tab" aria-selected="${S.tab===k}" data-tab="${k}">${l}</button>`).join("")}</div>`}
@@ -242,7 +280,7 @@ function brandForm(){
     if(!days.includes(S.dia))S.dia=days[0];
     const st=k=>{const l=db.items.filter(i=>i.tipo==="dia"&&i.d.fecha===k);if(!l.length)return"Sin concurso";const c=e=>l.filter(i=>i.estado===e).length;return[c("aprobado")&&c("aprobado")+" aprobado",c("pendiente")&&c("pendiente")+" pendiente",c("rechazado")&&c("rechazado")+" rechazado"].filter(Boolean).join(" · ")};
     return`<div class="card"><h2>Tus días de marca</h2><p class="mut">Elige el día y monta un concurso distinto para cada uno.</p><div class="days">${days.map(k=>`<button type="button" class="day${S.dia===k?" on":""}" data-day="${k}"><b>${fdate(k)}</b>${myEntry(k).tec?`<span>${esc(myEntry(k).tec)}</span><br>`:""}<span>${st(k)}</span></button>`).join("")}</div></div><form class="card pn" id="f"><h2>Concurso del ${fdate(S.dia)}${myEntry(S.dia)?.tec?" · "+esc(myEntry(S.dia).tec):""}</h2><p class="mut">Este concurso aplica solo para ese día.</p><input type="hidden" id="fecha" value="${S.dia}"><label for="tit">Nombre del concurso</label><input id="tit" required placeholder="Ej.: ${nom(m)} Day">${aliPick()}<h3 style="margin:18px 0 4px">Meta del día</h3><p class="note" style="margin:0 0 8px">Si el concurso exige una meta, escríbela por aliado igual que en la meta volante.</p>${metaFields(true)}${payEditor()}<label for="cond" style="margin-top:16px">Condiciones (los asesores también las ven)</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar concurso del ${fdate(S.dia)} a aprobación</button></form>`}
-  return`<form class="card pn" id="f"><h2>Nueva oferta específica</h2><p class="mut">Incentivos puntuales, como “hoy pagamos $25.000 por esta referencia”.</p><div class="grid"><div style="grid-column:1/-1"><label for="tit">Título de la oferta</label><input id="tit" required></div><div><label for="d1">Desde</label><input id="d1" type="date" min="${S.mes}-01" max="${S.mes}-${lastDay(S.mes)}" required></div><div><label for="d2">Hasta</label><input id="d2" type="date" required></div></div>${aliPick()}${payEditor()}<label for="cond" style="margin-top:16px">Condiciones (los asesores también las ven)</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar a aprobación</button></form>`;
+  return`<form class="card pn" id="f"><h2>Nueva oferta específica</h2><p class="mut">Incentivos puntuales, como “hoy pagamos $25.000 por esta referencia”.</p><div class="grid"><div style="grid-column:1/-1"><label for="tit">Título de la oferta</label><input id="tit" required></div><div><label for="d1">Desde</label><input id="d1" type="date" min="${S.mes}-01" max="${S.mes}-${lastDay(S.mes)}" required></div><div><label for="d2">Hasta</label><input id="d2" type="date" required></div></div><h3 style="margin:18px 0 4px">Imagen de la oferta (opcional)</h3><p class="note" style="margin:0 0 8px">Pieza publicitaria o foto del equipo. JPG o PNG.</p><div id="ofprev">${S.ofImg?`<img class="ofimg" src="${S.ofImg}" alt="Vista previa"><button type="button" class="btn sec sm" data-act="ofimgx">Quitar imagen</button>`:""}</div><label class="btn sec sm" style="margin:6px 0 0;color:var(--ink);display:inline-flex;align-items:center">${S.ofImg?"Cambiar imagen":"Subir imagen"}<input type="file" id="ofimgin" accept="image/*" hidden></label>${aliPick()}${payEditor()}<label for="cond" style="margin-top:16px">Condiciones (los asesores también las ven)</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar a aprobación</button></form>`;
 }
 function viewBrand(){
   if(!["meta","dia","oferta"].includes(S.tab))S.tab="meta";
@@ -291,7 +329,7 @@ function viewAli(){
 function aseCard(it,ali){
   const d=it.d,rows=(d.pagos||[]).filter(p=>p.ase>0),when=it.tipo==="dia"?fdate(d.fecha):fdate(d.desde)+" – "+fdate(d.hasta);
   const intro=it.tipo==="meta"?`<p style="margin:8px 0">Si <b>${esc(ali)}</b> cumple su meta volante con ${nom(it.marca)}, ganas por cada venta:</p>`:d.conMeta?`<p style="margin:8px 0">Si <b>${esc(ali)}</b> cumple la meta de este día, ganas por cada venta:</p>`:`<p style="margin:8px 0">Ganas por cada venta:</p>`;
-  return`<div class="card"><div class="row" style="justify-content:space-between"><div class="row">${logo(it.marca)}<h3>${esc(nomIt(it))}${it.tipo!=="meta"?" · "+esc(d.titulo):""}</h3></div><span class="tag">${linea(it.marca)}</span></div><p class="mut" style="margin:4px 0 0">${when}</p>${intro}${rows.length?`<table class="stack"><thead><tr><th>Referencia</th><th class="n">Tú ganas</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${esc(p.ref)}</td><td class="n"><b>${money(p.ase)}</b></td></tr>`).join("")}</tbody></table>`:`<p class="mut">Esta marca no definió pago para asesores en este incentivo.</p>`}${d.cond?`<p class="note"><b>Condiciones:</b> ${esc(d.cond)}</p>`:""}</div>`;
+  return`<div class="card"><div class="row" style="justify-content:space-between"><div class="row">${logo(it.marca)}<h3>${esc(nomIt(it))}${it.tipo!=="meta"?" · "+esc(d.titulo):""}</h3></div><span class="tag">${linea(it.marca)}</span></div><p class="mut" style="margin:4px 0 0">${when}</p>${d.img&&db.imgs[d.img]?`<img class="ofimg" src="${db.imgs[d.img]}" alt="Imagen de la oferta">`:""}${intro}${rows.length?`<table class="stack"><thead><tr><th>Referencia</th><th class="n">Tú ganas</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${esc(p.ref)}</td><td class="n"><b>${money(p.ase)}</b></td></tr>`).join("")}</tbody></table>`:`<p class="mut">Esta marca no definió pago para asesores en este incentivo.</p>`}${d.cond?`<p class="note"><b>Condiciones:</b> ${esc(d.cond)}</p>`:""}</div>`;
 }
 function viewAse(){
   if(!db.me)return`<div class="empty">No encontramos tu ficha de asesor. Sal y regístrate de nuevo, o pide ayuda al jefe de canal.</div>`;
@@ -368,7 +406,8 @@ app.addEventListener("submit",async e=>{
       if(S.tab==="dia"){let metas=readMetas();if(al!=="todos")metas=Object.fromEntries(Object.entries(metas).filter(([k])=>al.includes(k)));Object.assign(d,{metas,objU:parseFloat(v("obju"))||0,objM:parseFloat(v("objm"))||0})}
       Object.assign(d,{titulo:v("tit").trim(),aliados:al},S.tab==="dia"?{fecha:v("fecha"),tec:myEntry(v("fecha"))?.tec||""}:{desde:v("d1"),hasta:v("d2")})}
     const it={ms:slug(S.user.name),marca:S.user.name,tipo:S.tab,estado:"pendiente",d,creado:serverTimestamp()};it.mes=mesOf(it);
-    await act(async()=>{await addDoc(collection(fs,"items"),it);await loadMonth();render()},it.mes===S.mes?"Enviado. Queda pendiente de aprobación.":`Enviado a ${mesLabel(it.mes)}. Queda pendiente de aprobación.`);
+    if(it.mes<MES0){toast("La plataforma arranca en diciembre de 2026. Revisa las fechas.");return}
+    await act(async()=>{if(S.tab==="oferta"&&S.ofImg){const ref=doc(collection(fs,"imgs"));await setDoc(ref,{ms:it.ms,data:S.ofImg});d.img=ref.id;db.imgs[ref.id]=S.ofImg}await addDoc(collection(fs,"items"),it);S.ofImg="";await loadMonth();render()},it.mes===S.mes?"Enviado. Queda pendiente de aprobación.":`Enviado a ${mesLabel(it.mes)}. Queda pendiente de aprobación.`);
   }
 });
 app.addEventListener("click",async e=>{
@@ -389,6 +428,8 @@ app.addEventListener("click",async e=>{
   else if(a==="rej"){S.rej=id;render();document.getElementById("rc")?.focus()}
   else if(a==="rej-x"){S.rej=null;render()}
   else if(a==="rej-ok"&&it){const c=v("rc").trim()||"Sin comentario";await act(async()=>{await updateDoc(doc(fs,"items",id),{estado:"rechazado",por:S.user.name,coment:c});it.estado="rechazado";it.por=S.user.name;it.coment=c;S.rej=null;render()},"Rechazado. La marca verá el comentario.")}
+  else if(a==="pdf"&&it){abrirPDF(it)}
+  else if(a==="ofimgx"){S.ofImg="";document.getElementById("ofprev").innerHTML="";const l=document.getElementById("ofimgin")?.closest("label");if(l)l.firstChild.textContent="Subir imagen"}
   else if(a==="calclear"){S.calDay="";render()}
   else if(a==="filclear"){S.fM="";S.fD="";render()}
   else if(a==="calrm"){const k=t.dataset.k,i=+t.dataset.i,e=(db.cal[k]||[]).filter((_,j)=>j!==i);await act(async()=>{if(e.length)await setDoc(doc(fs,"cal",k),{e});else await deleteDoc(doc(fs,"cal",k));if(e.length)db.cal[k]=e;else delete db.cal[k];render()},"Marca quitada de ese día")}
@@ -401,7 +442,8 @@ app.addEventListener("change",async e=>{
   if(e.target.id==="mes"){S.mes=e.target.value;S.dia=null;S.rej=null;S.fD="";S.calDay="";await act(async()=>{await loadMonth();render()});return}
   if(e.target.id==="cm"){const b=document.getElementById("tecbox");b.hidden=e.target.value!=="TECNOLOGIA";document.getElementById("ct").required=!b.hidden;if(!b.hidden)document.getElementById("ct").focus();return}
   if(e.target.id==="todos"){document.getElementById("alis").hidden=e.target.checked;return}
-  if(e.target.id==="logoin"){const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,160/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext("2d").drawImage(im,0,0,c.width,c.height);const data=c.toDataURL("image/png");act(async()=>{await setDoc(doc(fs,"logos",slug(S.user.name)),{data});db.logos[S.user.name]=data;render()},"Logo actualizado")};im.onerror=()=>toast("No se pudo leer la imagen");im.src=r.result};r.readAsDataURL(file)}
+  if(e.target.id==="ofimgin"){const file=e.target.files[0];if(!file)return;e.target.value="";achicar(file,1200,900000).then(data=>{S.ofImg=data;document.getElementById("ofprev").innerHTML=`<img class="ofimg" src="${data}" alt="Vista previa"><button type="button" class="btn sec sm" data-act="ofimgx">Quitar imagen</button>`;e.target.closest("label").firstChild.textContent="Cambiar imagen"}).catch(()=>toast("No se pudo leer la imagen. Prueba con otro archivo JPG o PNG."));return}
+  if(e.target.id==="logoin"){const file=e.target.files[0];if(!file)return;e.target.value="";const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,160/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext("2d").drawImage(im,0,0,c.width,c.height);const data=c.toDataURL("image/png");act(async()=>{await setDoc(doc(fs,"logos",slug(S.user.name)),{data});db.logos[S.user.name]=data;render()},"Logo actualizado")};im.onerror=()=>toast("No se pudo leer la imagen");im.src=r.result};r.readAsDataURL(file)}
 });
 
 app.innerHTML=`<div class="wrap"><div class="empty">Cargando…</div></div>`;
