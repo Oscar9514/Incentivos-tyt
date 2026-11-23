@@ -1,35 +1,32 @@
-# Plataforma de incentivos TYT (boceto)
+# Plataforma de incentivos TYT
 
-Boceto navegable de la plataforma de incentivos de marcas para aliados: metas volantes, días de marca y ofertas específicas.
+Plataforma de incentivos de marcas para aliados y asesores: metas volantes, días de marca y ofertas específicas. Los datos se guardan en Firebase (proyecto `incentivos-tyt`, plan gratuito Spark).
 
 ## Archivos
 
 | Archivo | Para qué sirve |
 | --- | --- |
-| `index.html` | La plataforma completa en un solo archivo |
-| `presentacion.pdf` | Presentación de la plataforma (se abre desde el botón de la pantalla de ingreso) |
+| `index.html` | La plataforma, conectada a Firebase |
+| `firestore.rules` | Reglas de seguridad para pegar en Firestore > Reglas |
+| `presentacion.pdf` | Presentación de la plataforma |
 | `.nojekyll` | Le indica a GitHub Pages que publique los archivos tal cual |
 
-## Publicar en GitHub Pages
+## Puesta en marcha (una sola vez)
 
-1. Entra a github.com y crea un repositorio nuevo, por ejemplo `incentivos-tyt`.
-2. Pulsa **Add file > Upload files** y sube los tres archivos de esta carpeta.
-3. Pulsa **Commit changes**.
-4. Ve a **Settings > Pages**.
-5. En **Source**, elige **Deploy from a branch**. En **Branch**, elige `main` y la carpeta `/ (root)`. Pulsa **Save**.
-6. En uno o dos minutos la página queda publicada en `https://TU-USUARIO.github.io/incentivos-tyt/`.
+1. **Reglas:** en Firebase, Firestore Database > Reglas, borra todo, pega el contenido de `firestore.rules` y pulsa Publicar.
+2. **Primer jefe:** en Authentication > Usuarios > Agregar usuario, crea `j.gina@incentivos-tyt.app` con una contraseña.
+3. **Dominio:** en Authentication > Configuración > Dominios autorizados, agrega `oscar9514.github.io`.
+4. **Resto de usuarios:** entra a la plataforma como Gina Bermúdez, pestaña Usuarios, y pulsa "Crear usuarios que falten". Copia la lista de contraseñas y entrégala a cada usuario por un canal privado.
 
-Para actualizar la página, vuelve a subir el `index.html` nuevo en el mismo repositorio.
+## Cómo ingresa cada perfil
 
-## Cómo probarlo
+- Marcas, jefes y aliados: eligen su nombre y escriben la contraseña que les entregó el jefe.
+- Asesores: se registran solos con su cédula, nombre, aliado y una contraseña propia.
 
-- Elige un usuario (marca, jefe de canal o aliado). La contraseña de prueba es `1234`.
-- Los incentivos precargados son datos de ejemplo.
+## Si alguien olvida su contraseña
 
-## Limitaciones del boceto
+En Firebase, Authentication > Usuarios, elimina su usuario. Marcas y aliados: luego el jefe pulsa "Crear usuarios que falten". Asesores: borra también su ficha en Firestore > asesores y pídele que se registre de nuevo.
 
-- Los datos se guardan solo en el navegador de cada persona. Lo que aprueba un jefe no lo ve un aliado en otro computador.
-- Las contraseñas no son seguras: están dentro del código de la página.
-- En una cuenta gratuita de GitHub, el repositorio y la página son públicos. No subas datos reales de metas o pagos.
+## Correos internos
 
-Para la versión final hace falta un servidor con base de datos y usuarios reales (servidor de TYT o Firebase).
+Los usuarios no usan correo, pero Firebase los identifica así: marcas `m.oppo@incentivos-tyt.app`, aliados `a.cos-bogota@incentivos-tyt.app`, jefes `j.gina@` y `j.cesar@incentivos-tyt.app`, asesores `cédula@asesor.incentivos-tyt.app`.

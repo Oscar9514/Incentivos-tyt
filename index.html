@@ -79,239 +79,304 @@ details summary{cursor:pointer;font-weight:600;min-height:32px}
 <body>
 <div id="app"></div>
 <div class="toast" id="toast"></div>
-<script>
-{
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {getAuth,signInWithEmailAndPassword,createUserWithEmailAndPassword,signOut,onAuthStateChanged,updatePassword,reauthenticateWithCredential,EmailAuthProvider} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {getFirestore,collection,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,query,where,writeBatch,serverTimestamp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig={apiKey:"AIzaSyDxTovSKRV_OYWzMlMRPJCpNB61CdNhjiY",authDomain:"incentivos-tyt.firebaseapp.com",projectId:"incentivos-tyt",storageBucket:"incentivos-tyt.firebasestorage.app",messagingSenderId:"776716313443",appId:"1:776716313443:web:824ee7fd2298f9f3d96956"};
+const fa=initializeApp(firebaseConfig),auth=getAuth(fa),fs=getFirestore(fa);
+let secA=null;const secAuth=()=>secA||(secA=getAuth(initializeApp(firebaseConfig,"crear-usuarios")));
+
 const ALIADOS=["ALTYCOM BARRANQUILLA","CONEXIONES DIGITALES","CONEXIONES DIGITALES BARRANQUILLA","CONTACTMASTER BPO MANIZALES","COS BARRANQUILLA","GNP CALI","VOICETECH MEDELLIN","BENTOINT","COS BOGOTA","ONE CONTACT BOGOTA","VECTOR BOGOTA","ASISTE ING","GNP","ARCOS BOGOTA","ATENTO BOGOTA"];
 const MARCAS=["HONOR","HUAWEI","KALLEY","MOTOROLA","OPPO","SAMSUNG","TCL","TECNO","VIVO","XIAOMI","ZTE","TECNOLOGIA"];
 const JEFES=["Gina Bermúdez","César"];
+const DOM="incentivos-tyt.app";
+const slug=s=>s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+const JEFE_EMAIL={"Gina Bermúdez":"j.gina@"+DOM,"César":"j.cesar@"+DOM};
+const MS=Object.fromEntries(MARCAS.map(m=>[slug(m),m])),AS=Object.fromEntries(ALIADOS.map(a=>[slug(a),a]));
+const emailOf=(r,n)=>r==="brand"?`m.${slug(n)}@${DOM}`:r==="ali"?`a.${slug(n)}@${DOM}`:r==="jefe"?JEFE_EMAIL[n]:`${n}@asesor.${DOM}`;
+function userFromEmail(em){
+  em=(em||"").toLowerCase();
+  if(em.endsWith("@asesor."+DOM))return{role:"ase",name:em.split("@")[0]};
+  const j=Object.entries(JEFE_EMAIL).find(([,e])=>e===em);if(j)return{role:"jefe",name:j[0]};
+  if(!em.endsWith("@"+DOM))return null;
+  const l=em.split("@")[0];
+  if(l.startsWith("m.")&&MS[l.slice(2)])return{role:"brand",name:MS[l.slice(2)]};
+  if(l.startsWith("a.")&&AS[l.slice(2)])return{role:"ali",name:AS[l.slice(2)]};
+  return null;
+}
+
 const TIPOS={meta:"Meta volante",dia:"Día de marca",oferta:"Oferta específica"};
 const linea=m=>m==="TECNOLOGIA"?"Tecnología":"Terminales";
 const nom=m=>m==="TECNOLOGIA"?"Tecnología":m[0]+m.slice(1).toLowerCase();
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money=v=>v?"$"+Number(v).toLocaleString("es-CO"):"—";
 const num=v=>Number(v||0).toLocaleString("es-CO",{maximumFractionDigits:2});
-const fm=(v,u)=>u==="mill"?"$"+num(v)+" M":num(v)+" und";
 const ub=(u,m)=>[u?num(u)+" und":"",m?"$"+num(m)+" M":""].filter(Boolean).join(" · ")||"—";
-const mU=m=>Number(m.und||0),mM=m=>Number(m.mill||0),hasM=m=>m&&(mU(m)>0||mM(m)>0);
+const mU=m=>Number(m?.und||0),mM=m=>Number(m?.mill||0),hasM=m=>m&&(mU(m)>0||mM(m)>0);
 const fdate=s=>{if(!s)return"";const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d).toLocaleDateString("es-CO",{weekday:"short",day:"numeric",month:"short"})};
-const KEY="tyt-incentivos-v6";
 const mesOf=it=>(it.tipo==="dia"?it.d.fecha:it.d.desde||"").slice(0,7);
 const mesLabel=k=>{const[y,m]=k.split("-").map(Number);const t=new Date(y,m-1,1).toLocaleDateString("es-CO",{month:"long",year:"numeric"});return t[0].toUpperCase()+t.slice(1)};
 const mesCorto=k=>{const[y,m]=k.split("-").map(Number);return new Date(y,m-1,1).toLocaleDateString("es-CO",{month:"long"})};
 const lastDay=k=>{const[y,m]=k.split("-").map(Number);return new Date(y,m,0).getDate()};
-const hoyMes=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")};
-const sigMes=k=>{const[y,m]=k.split("-").map(Number);const d=new Date(y,m,1);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")};
+const ym=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+const hoyMes=()=>ym(new Date());
+const hoyISO=()=>{const t=new Date();return ym(t)+"-"+String(t.getDate()).padStart(2,"0")};
+const meses=()=>{const t=new Date(),o=[];for(let i=1;i>=-12;i--)o.push(ym(new Date(t.getFullYear(),t.getMonth()+i,1)));return o};
+const ts=i=>i.creado?.seconds??9e12;
 
-function seed(){
-  const metas=(vu,vm)=>Object.fromEntries(ALIADOS.map((a,i)=>[a,{und:vu?vu[i]||0:0,mill:vm?vm[i]||0:0,cat:["A","B","C"][i%3]}]));
-  const pct=(v,k)=>v.map(x=>Math.round(x*k));
-  return{
-    cal:{"2026-11-14":"SAMSUNG","2026-11-21":"OPPO","2026-12-05":"SAMSUNG","2026-12-06":"SAMSUNG","2026-12-11":"MOTOROLA","2026-12-12":"OPPO","2026-12-18":"XIAOMI","2026-12-19":"VIVO","2026-12-20":"TECNOLOGIA"},
-    items:[
-      {id:1,marca:"OPPO",tipo:"meta",estado:"aprobado",por:"Gina Bermúdez",d:{objU:4500,objM:1350,desde:"2026-12-01",hasta:"2026-12-31",metas:metas([520,410,260,300,380,240,330,180,350,290,310,150,220,280,260],pct([520,410,260,300,380,240,330,180,350,290,310,150,220,280,260],0.3)),pagos:[{ref:"Reno 14 Pro 512 GB",ali:70000,staff:15000,ase:15000},{ref:"Reno 14 256 GB",ali:56000,staff:12000,ase:12000},{ref:"A80 5G",ali:42000,staff:9000,ase:9000},{ref:"A40 128 GB",ali:28000,staff:6000,ase:6000}],cond:"Solo ventas efectivas en el informe oficial. Corte 31 dic, pago estimado 20 ene. Valores antes de IVA."}},
-      {id:2,marca:"VIVO",tipo:"meta",estado:"pendiente",d:{objU:3200,objM:0,desde:"2026-12-01",hasta:"2026-12-31",metas:metas([300,250,180,200,260,150,240,120,230,200,210,110,160,190,200]),pagos:[{ref:"V50 256 GB",ali:60000,staff:12000,ase:13000},{ref:"Y29 128 GB",ali:30000,staff:6000,ase:7000}],cond:"Corte 31 dic. Valores con IVA."}},
-      {id:3,marca:"SAMSUNG",tipo:"dia",estado:"aprobado",por:"César",d:{fecha:"2026-12-05",titulo:"Galaxy Weekend",aliados:"todos",pagos:[{ref:"Galaxy A56 5G",ali:20000,staff:5000,ase:10000},{ref:"Galaxy A26",ali:12000,staff:3000,ase:6000}],cond:"Aplica a ventas activadas el mismo día."}},
-      {id:4,marca:"XIAOMI",tipo:"oferta",estado:"aprobado",por:"Gina Bermúdez",d:{titulo:"Hoy pagamos $25.000 por Redmi Note 15",desde:"2026-12-03",hasta:"2026-12-04",aliados:"todos",pagos:[{ref:"Redmi Note 15 256 GB",ali:0,staff:0,ase:25000}],cond:"Solo ventas del 3 y 4 de diciembre."}},
-      {id:5,marca:"TECNOLOGIA",tipo:"meta",estado:"aprobado",por:"César",d:{objU:900,objM:0,desde:"2026-12-01",hasta:"2026-12-31",metas:metas([90,70,40,60,80,40,70,30,70,60,60,30,50,60,90]),pagos:[{ref:"Portátiles gama media",ali:40000,staff:8000,ase:10000},{ref:"Smartwatch",ali:15000,staff:3000,ase:5000}],cond:"Línea de tecnología. Corte 31 dic."}},
-      {id:6,marca:"MOTOROLA",tipo:"dia",estado:"pendiente",d:{fecha:"2026-12-11",titulo:"Moto Day",aliados:["COS BOGOTA","ATENTO BOGOTA","ARCOS BOGOTA"],pagos:[{ref:"moto g86",ali:15000,staff:4000,ase:8000}],cond:"Solo sedes Bogotá."}},
-      ...[["SAMSUNG",7,60,"aprobado","César",1],["XIAOMI",8,450,"aprobado","Gina Bermúdez"],["HONOR",9,250,"aprobado","Gina Bermúdez"],["MOTOROLA",10,350,"aprobado","César"],["TCL",11,200,"pendiente"]].map(([m,id,b,e,por,u])=>({id,marca:m,tipo:"meta",estado:e,por,d:{objU:u?0:b*15,objM:u?b*15:0,desde:"2026-12-01",hasta:"2026-12-31",metas:(v=>u?metas(null,v):metas(v))(ALIADOS.map((_,i)=>Math.round(b*(0.5+((i*37+id)%10)/10)))),pagos:[{ref:"Gama alta",ali:60000,staff:12000,ase:12000},{ref:"Gama media",ali:40000,staff:8000,ase:8000},{ref:"Gama entrada",ali:20000,staff:4000,ase:5000}],cond:"Solo ventas efectivas en el informe oficial. Corte 31 dic."}}))
-      ,{id:12,marca:"SAMSUNG",tipo:"dia",estado:"aprobado",por:"Gina Bermúdez",d:{fecha:"2026-12-06",titulo:"Domingo Galaxy Tab",aliados:"todos",pagos:[{ref:"Galaxy Tab A9+",ali:15000,staff:4000,ase:8000},{ref:"Galaxy Watch8",ali:10000,staff:2000,ase:5000}],cond:"Concurso distinto al del sábado. Aplica solo a ventas del 6 de diciembre."}}
-      ,{id:13,marca:"OPPO",tipo:"meta",estado:"aprobado",por:"César",d:{objU:4000,objM:0,desde:"2026-11-01",hasta:"2026-11-30",metas:metas([480,380,240,280,350,220,300,160,320,270,290,140,200,260,240]),pagos:[{ref:"Reno 13 256 GB",ali:60000,staff:12000,ase:12000},{ref:"A60 128 GB",ali:25000,staff:5000,ase:5000}],cond:"Mes cerrado. Corte 30 nov."}}
-      ,{id:14,marca:"SAMSUNG",tipo:"meta",estado:"aprobado",por:"Gina Bermúdez",d:{objU:0,objM:800,desde:"2026-11-01",hasta:"2026-11-30",metas:metas(null,[65,50,30,40,55,30,45,20,45,40,40,20,30,35,40]),pagos:[{ref:"Gama alta",ali:55000,staff:11000,ase:11000},{ref:"Gama media",ali:35000,staff:7000,ase:7000}],cond:"Mes cerrado. Corte 30 nov."}}
-      ,{id:15,marca:"SAMSUNG",tipo:"dia",estado:"aprobado",por:"César",d:{fecha:"2026-11-14",titulo:"Galaxy Black Days",aliados:"todos",pagos:[{ref:"Galaxy A36 5G",ali:18000,staff:4000,ase:9000}],cond:"Solo ventas del 14 de noviembre."}}
-      ,{id:16,marca:"XIAOMI",tipo:"oferta",estado:"aprobado",por:"Gina Bermúdez",d:{titulo:"Redmi 14C a $15.000 por venta",desde:"2026-11-27",hasta:"2026-11-28",aliados:"todos",pagos:[{ref:"Redmi 14C 128 GB",ali:0,staff:0,ase:15000}],cond:"Black Friday."}}
-    ],logos:{},asesores:{"1000000001":{nombre:"Laura Gómez",aliado:"ALTYCOM BARRANQUILLA",creado:"2026-11-20"}},next:17};
-}
-let db;try{db=JSON.parse(localStorage.getItem(KEY))}catch(e){}
-if(!db){try{const o=JSON.parse(localStorage.getItem("tyt-incentivos-v5"));if(o){db=seed();db.pw=o.pw||{};db.logos=o.logos||{};db.asesores={...db.asesores,...(o.asesores||{})}}}catch(e){}}
-if(!db||!db.items)db=seed();db.logos=db.logos||{};db.pw=db.pw||{};db.asesores=db.asesores||{};
-const hash=async t=>{try{const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("tyt:"+t));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}catch(e){return"p:"+t}};
-const ukey=()=>S.user.role+"|"+S.user.name;
-const checkPw=async(k,p)=>db.pw[k]?(await hash(p))===db.pw[k]:p==="1234";
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}};
-const S={user:null,tab:null,lin:"Todas",rej:null,dia:null,mes:null};
-const meses=()=>{const set=new Set([hoyMes(),sigMes(hoyMes())]);db.items.forEach(i=>{const m=mesOf(i);if(m)set.add(m)});Object.keys(db.cal).forEach(k=>set.add(k.slice(0,7)));return[...set].sort().reverse()};
-const defMes=()=>{const ds=new Set(db.items.map(mesOf));const l=meses().filter(m=>ds.has(m));return l.includes(hoyMes())&&!ds.has(sigMes(hoyMes()))?hoyMes():(l[0]||hoyMes())};
-const enMes=it=>mesOf(it)===S.mes;
+const db={items:[],cal:{},logos:{},asesores:{},perfil:null,me:null};
+const S={user:null,tab:null,lin:"Todas",rej:null,dia:null,mes:hoyMes(),login:"std",pw:false,busy:false,creados:null,registering:false};
+const enMes=it=>it.mes===S.mes;
 const app=document.getElementById("app");
-const toast=t=>{const e=document.getElementById("toast");e.textContent=t;e.classList.add("on");clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove("on"),2200)};
+const toast=t=>{const e=document.getElementById("toast");e.textContent=t;e.classList.add("on");clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove("on"),3200)};
+const ERR={"permission-denied":"No tienes permiso para esta acción.","auth/invalid-credential":"Usuario o contraseña incorrecta.","auth/wrong-password":"Usuario o contraseña incorrecta.","auth/user-not-found":"Usuario o contraseña incorrecta.","auth/invalid-login-credentials":"Usuario o contraseña incorrecta.","auth/too-many-requests":"Demasiados intentos. Espera unos minutos e inténtalo de nuevo.","auth/network-request-failed":"Sin conexión con el servidor. Revisa tu internet.","unavailable":"Sin conexión con el servidor. Revisa tu internet.","auth/email-already-in-use":"Esta cédula ya está registrada. Ingresa con tu contraseña.","auth/weak-password":"La contraseña debe tener mínimo 6 caracteres.","auth/requires-recent-login":"Por seguridad, sal y vuelve a entrar antes de cambiar la contraseña."};
+const errMsg=e=>ERR[e?.code]||("Error: "+(e?.code||e?.message||e));
+async function act(fn,ok){if(S.busy)return;S.busy=true;try{await fn();if(ok)toast(ok)}catch(e){console.error(e);toast(errMsg(e))}finally{S.busy=false}}
 
-const logo=(m,big)=>db.logos[m]?`<img class="logo${big?" lg":""}" src="${db.logos[m]}" alt="Logo ${esc(nom(m))}">`:`<span class="logo${big?" lg":""}" aria-hidden="true">${esc(nom(m).slice(0,2).toUpperCase())}</span>`;
-const forAli=(it,a)=>it.tipo==="meta"?hasM(it.d.metas[a]):(it.d.aliados==="todos"||(it.d.aliados||[]).includes(a));
-
-function payTable(p,cols){
-  const C={ali:"Pago aliado",staff:"Pago staff",ase:"Pago asesor"};
-  return`<table class="stack"><thead><tr><th>Referencia</th>${cols.map(c=>`<th class="n">${C[c]}</th>`).join("")}</tr></thead><tbody>${p.map(r=>`<tr><td>${esc(r.ref)}</td>${cols.map(c=>`<td class="n">${money(r[c])}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+/* ---------- datos ---------- */
+async function loadCommon(){
+  const[c,l]=await Promise.all([getDocs(collection(fs,"cal")),getDocs(collection(fs,"logos"))]);
+  db.cal={};c.forEach(d=>db.cal[d.id]=d.data().marca);
+  db.logos={};l.forEach(d=>{if(MS[d.id])db.logos[MS[d.id]]=d.data().data});
 }
+async function loadMonth(){
+  const r=S.user.role;let q;
+  if(r==="jefe")q=query(collection(fs,"items"),where("mes","==",S.mes));
+  else if(r==="brand")q=query(collection(fs,"items"),where("ms","==",slug(S.user.name)),where("mes","==",S.mes));
+  else if(r==="ali")q=query(collection(fs,"pub_ali"),where("as","==",slug(S.user.name)),where("mes","==",S.mes));
+  else{if(!db.me){db.items=[];return}q=query(collection(fs,"pub_ase"),where("as","==",db.me.as),where("mes","==",S.mes))}
+  const s=await getDocs(q);db.items=s.docs.map(d=>({id:d.id,...d.data()}));
+  if(r==="ali"||r==="ase")db.items.forEach(i=>i.estado="aprobado");
+  if(r==="jefe"){const a=await getDocs(collection(fs,"asesores"));db.asesores={};a.forEach(d=>db.asesores[d.id]=d.data())}
+}
+async function startSession(u){
+  const usr=userFromEmail(u.email);
+  if(!usr){await signOut(auth);toast("Este usuario no tiene un perfil en la plataforma.");return}
+  S.user=usr;S.tab=null;S.dia=null;S.lin="Todas";S.pw=false;S.creados=null;
+  app.innerHTML=`<div class="wrap"><div class="empty">Cargando…</div></div>`;
+  try{
+    const p=await getDoc(doc(fs,"perfil",u.uid));db.perfil=p.exists()?p.data():null;
+    if(usr.role==="ase"){const m=await getDoc(doc(fs,"asesores",usr.name));db.me=m.exists()?m.data():null}else db.me=null;
+    await loadCommon();await loadMonth();
+  }catch(e){console.error(e);toast(errMsg(e))}
+  render();window.scrollTo(0,0);
+}
+async function reload(){await loadCommon();await loadMonth();render()}
+
+async function aprobar(it){
+  const b=writeBatch(fs);
+  b.update(doc(fs,"items",it.id),{estado:"aprobado",por:S.user.name,coment:""});
+  const targets=it.tipo==="meta"?ALIADOS.filter(a=>hasM(it.d.metas?.[a])):(it.d.aliados==="todos"?ALIADOS:it.d.aliados);
+  for(const a of targets){
+    const as=slug(a),id=it.id+"_"+as,base={as,ms:it.ms,marca:it.marca,tipo:it.tipo,mes:it.mes,creado:serverTimestamp()};
+    const dA={...it.d};if(it.tipo==="meta"){dA.metas={[a]:it.d.metas[a]};delete dA.objU;delete dA.objM}else dA.aliados=[a];
+    b.set(doc(fs,"pub_ali",id),{...base,d:dA});
+    const dS={titulo:it.d.titulo||"",fecha:it.d.fecha||"",desde:it.d.desde||"",hasta:it.d.hasta||"",cond:it.d.cond||"",pagos:(it.d.pagos||[]).filter(p=>p.ase>0).map(p=>({ref:p.ref,ase:p.ase})),metas:{[a]:{und:1,mill:0}},aliados:[a]};
+    b.set(doc(fs,"pub_ase",id),{...base,d:dS});
+  }
+  await b.commit();
+}
+const genPw=()=>{const c="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";return[...crypto.getRandomValues(new Uint32Array(10))].map(x=>c[x%c.length]).join("")};
+async function crearUsuarios(){
+  const list=[...JEFES.map(j=>["jefe",j]),...MARCAS.map(m=>["brand",m]),...ALIADOS.map(a=>["ali",a])].filter(([r,n])=>!(r==="jefe"&&n===S.user.name));
+  const sa=secAuth(),out=[];S.creados={prog:0,total:list.length,rows:out};render();
+  for(const[r,n]of list){
+    const pw=genPw(),label=(r==="jefe"?"Jefe: ":r==="brand"?"Marca: ":"Aliado: ")+(r==="brand"?nom(n):n);
+    try{await createUserWithEmailAndPassword(sa,emailOf(r,n),pw);out.push({label,pw});await signOut(sa)}
+    catch(e){out.push({label,err:e.code==="auth/email-already-in-use"?"Ya existía (no se cambió)":errMsg(e)});if(e.code==="auth/too-many-requests")break}
+    S.creados.prog++;render();await new Promise(z=>setTimeout(z,350));
+  }
+  S.creados.done=true;render();
+}
+
+/* ---------- vistas ---------- */
+const logo=(m,big)=>db.logos[m]?`<img class="logo${big?" lg":""}" src="${db.logos[m]}" alt="Logo ${esc(nom(m))}">`:`<span class="logo${big?" lg":""}" aria-hidden="true">${esc(nom(m).slice(0,2).toUpperCase())}</span>`;
+const forAli=(it,a)=>it.tipo==="meta"?hasM(it.d.metas?.[a]):(it.d.aliados==="todos"||(it.d.aliados||[]).includes(a));
+function payTable(p,cols){const C={ali:"Pago aliado",staff:"Pago staff",ase:"Pago asesor"};return`<table class="stack"><thead><tr><th>Referencia</th>${cols.map(c=>`<th class="n">${C[c]}</th>`).join("")}</tr></thead><tbody>${p.map(r=>`<tr><td>${esc(r.ref)}</td>${cols.map(c=>`<td class="n">${money(r[c])}</td>`).join("")}</tr>`).join("")}</tbody></table>`}
 function detail(it,ali){
   const d=it.d;let h="";
   if(it.tipo==="meta"){
     if(ali){const m=d.metas[ali];h+=`<div class="hero"><div><span class="mut">Tu meta</span><b>${ub(mU(m),mM(m))}</b></div><div><span class="mut">Categoría</span><b>${esc(m.cat)}</b></div><div><span class="mut">Vigencia</span><b style="font-size:16px">${fdate(d.desde)} – ${fdate(d.hasta)}</b></div></div>`}
-    else{const tu=Object.values(d.metas).reduce((s,m)=>s+mU(m),0),tm=Object.values(d.metas).reduce((s,m)=>s+mM(m),0);
+    else{const vs=Object.values(d.metas||{}),tu=vs.reduce((s,m)=>s+mU(m),0),tm=vs.reduce((s,m)=>s+mM(m),0);
       h+=`<div class="hero"><div><span class="mut">Objetivo total</span><b>${ub(d.objU,d.objM)}</b></div><div><span class="mut">Suma por aliado</span><b>${ub(tu,tm)}</b></div><div><span class="mut">Vigencia</span><b style="font-size:16px">${fdate(d.desde)} – ${fdate(d.hasta)}</b></div></div>`;
-      h+=`<details><summary>Meta por aliado (${Object.values(d.metas).filter(hasM).length})</summary><table class="stack"><thead><tr><th>Aliado</th><th class="n">Unidades</th><th class="n">Millones</th><th>Cat.</th></tr></thead><tbody>${Object.entries(d.metas).filter(([,m])=>hasM(m)).map(([a,m])=>`<tr><td>${esc(a)}</td><td class="n">${mU(m)?num(mU(m)):""}</td><td class="n">${mM(m)?"$"+num(mM(m))+" M":""}</td><td>${esc(m.cat)}</td></tr>`).join("")}</tbody></table></details>`}
-  }else{
-    h+=`<p style="margin:6px 0"><b>${esc(d.titulo)}</b><br><span class="mut">${it.tipo==="dia"?fdate(d.fecha):fdate(d.desde)+" – "+fdate(d.hasta)}${ali?"":" · "+(d.aliados==="todos"?"Todos los aliados":esc(d.aliados.join(", ")))}</span></p>`;
-  }
-  h+=payTable(d.pagos,["ali","staff","ase"]);
+      const ent=ALIADOS.filter(a=>hasM(d.metas?.[a]));
+      h+=`<details><summary>Meta por aliado (${ent.length})</summary><table class="stack"><thead><tr><th>Aliado</th><th class="n">Unidades</th><th class="n">Millones</th><th>Cat.</th></tr></thead><tbody>${ent.map(a=>{const m=d.metas[a];return`<tr><td>${esc(a)}</td><td class="n">${mU(m)?num(mU(m)):""}</td><td class="n">${mM(m)?"$"+num(mM(m))+" M":""}</td><td>${esc(m.cat)}</td></tr>`}).join("")}</tbody></table></details>`}
+  }else h+=`<p style="margin:6px 0"><b>${esc(d.titulo)}</b><br><span class="mut">${it.tipo==="dia"?fdate(d.fecha):fdate(d.desde)+" – "+fdate(d.hasta)}${ali?"":" · "+(d.aliados==="todos"?"Todos los aliados":esc((d.aliados||[]).join(", ")))}</span></p>`;
+  h+=payTable(d.pagos||[],["ali","staff","ase"]);
   if(d.cond)h+=`<p class="note"><b>Condiciones:</b> ${esc(d.cond)}</p>`;
   return h;
 }
 function itemCard(it,mode){
   let actions="";
-  if(mode==="jefe"&&it.estado==="pendiente"){
-    actions=S.rej===it.id?`<div style="margin-top:12px"><label for="rc">Motivo del rechazo</label><textarea id="rc" placeholder="Qué debe corregir la marca"></textarea><div class="row" style="margin-top:8px"><button class="btn no" data-act="rej-ok" data-id="${it.id}">Confirmar rechazo</button><button class="btn sec" data-act="rej-x">Cancelar</button></div></div>`
-    :`<div class="row" style="margin-top:12px"><button class="btn" data-act="ok" data-id="${it.id}">✓ Aprobar y publicar</button><button class="btn no" data-act="rej" data-id="${it.id}">Rechazar</button></div>`;
-  }
+  if(mode==="jefe"&&it.estado==="pendiente")actions=S.rej===it.id?`<div style="margin-top:12px"><label for="rc">Motivo del rechazo</label><textarea id="rc" placeholder="Qué debe corregir la marca"></textarea><div class="row" style="margin-top:8px"><button class="btn no" data-act="rej-ok" data-id="${it.id}">Confirmar rechazo</button><button class="btn sec" data-act="rej-x">Cancelar</button></div></div>`:`<div class="row" style="margin-top:12px"><button class="btn" data-act="ok" data-id="${it.id}">✓ Aprobar y publicar</button><button class="btn no" data-act="rej" data-id="${it.id}">Rechazar</button></div>`;
   const st=it.estado==="aprobado"&&it.por?` por ${esc(it.por)}`:"";
   return`<div class="card"><div class="row" style="justify-content:space-between"><div class="row">${logo(it.marca)}<h3>${nom(it.marca)} · ${TIPOS[it.tipo]}</h3></div>${mode==="ali"?`<span class="tag">${linea(it.marca)}</span>`:`<span class="pill p-${it.estado}">${it.estado[0].toUpperCase()+it.estado.slice(1)}${st}</span>`}</div>${it.coment?`<p class="note" style="color:var(--pki)"><b>Comentario del jefe:</b> ${esc(it.coment)}</p>`:""}${detail(it,mode==="ali"?S.user.name:null)}${actions}</div>`;
 }
 function tabs(list){if(!list.some(t=>t[0]===S.tab))S.tab=list[0][0];return`<div class="tabs" role="tablist">${list.map(([k,l])=>`<button class="tab" role="tab" aria-selected="${S.tab===k}" data-tab="${k}">${l}</button>`).join("")}</div>`}
 function calendar(){
-  const[cy,cm]=S.mes.split("-").map(Number),first=new Date(cy,cm-1,1),off=(first.getDay()+6)%7;let c="";
-  ["L","M","M","J","V","S","D"].forEach(x=>c+=`<div class="h">${x}</div>`);
-  for(let i=0;i<off;i++)c+="<div></div>";
+  const[cy,cm]=S.mes.split("-").map(Number),off=(new Date(cy,cm-1,1).getDay()+6)%7;let c="";
+  ["L","M","M","J","V","S","D"].forEach(x=>c+=`<div class="h">${x}</div>`);for(let i=0;i<off;i++)c+="<div></div>";
   for(let d=1;d<=lastDay(S.mes);d++){const k=`${S.mes}-${String(d).padStart(2,"0")}`,m=db.cal[k];c+=`<div class="d${m?" on":""}">${d}${m?`<span>${nom(m)}</span>`:""}</div>`}
   return`<div class="cal">${c}</div>`;
 }
-const payRow=(r={})=>`<tr><td><input name="ref" value="${esc(r.ref)}" placeholder="Referencia o familia"></td><td><input name="ali" type="number" inputmode="numeric" value="${r.ali||""}" placeholder="0"></td><td><input name="staff" type="number" inputmode="numeric" value="${r.staff||""}" placeholder="0"></td><td><input name="ase" type="number" inputmode="numeric" value="${r.ase||""}" placeholder="0"></td><td><button type="button" class="btn sec sm" data-act="delrow" aria-label="Quitar fila">✕</button></td></tr>`;
+const payRow=()=>`<tr><td><input name="ref" placeholder="Referencia o familia"></td><td><input name="ali" type="number" inputmode="numeric" placeholder="0"></td><td><input name="staff" type="number" inputmode="numeric" placeholder="0"></td><td><input name="ase" type="number" inputmode="numeric" placeholder="0"></td><td><button type="button" class="btn sec sm" data-act="delrow" aria-label="Quitar fila">✕</button></td></tr>`;
 const payEditor=()=>`<h3 style="margin:18px 0 4px">Tabla de pago por referencia</h3><p class="note" style="margin:0 0 8px">Valores en pesos por unidad vendida.</p><table class="stack" id="pays"><thead><tr><th>Referencia</th><th>Pago aliado</th><th>Pago staff</th><th>Pago asesor</th><th></th></tr></thead><tbody>${payRow()}${payRow()}</tbody></table><button type="button" class="btn sec sm" style="margin-top:8px" data-act="addrow">+ Agregar referencia</button>`;
 const aliPick=()=>`<label class="chk" style="margin-top:14px"><input type="checkbox" id="todos" checked> Aplica a todos los aliados</label><div class="chks" id="alis" hidden>${ALIADOS.map(a=>`<label class="chk"><input type="checkbox" value="${esc(a)}"> ${esc(a)}</label>`).join("")}</div>`;
-
+const myDays=()=>Object.entries(db.cal).filter(([k,b])=>b===S.user.name&&k.startsWith(S.mes)).map(([k])=>k).sort();
 function brandForm(){
   const m=S.user.name;
-  if(S.tab==="meta")return`<form class="card pn" id="f"><h2>Nueva meta volante de ${mesCorto(S.mes)}</h2><p class="mut">Formato único: objetivo, meta y categoría por aliado, pagos y condiciones.</p><div class="grid"><div><label for="obju">Objetivo total en unidades</label><input id="obju" type="number" inputmode="numeric" min="0" placeholder="0"></div><div><label for="objm">Objetivo total en millones</label><input id="objm" type="number" inputmode="decimal" step="any" min="0" placeholder="0"></div><div><label for="d1">Desde</label><input id="d1" type="date" value="${S.mes}-01" required></div><div><label for="d2">Hasta</label><input id="d2" type="date" value="${S.mes}-${lastDay(S.mes)}" required></div></div><h3 style="margin:18px 0 8px">Meta por aliado</h3><table class="stack"><thead><tr><th>Aliado</th><th>Unidades</th><th>Millones</th><th>Categoría</th></tr></thead><tbody>${ALIADOS.map((a,i)=>`<tr><td>${esc(a)}</td><td><input type="number" inputmode="numeric" min="0" data-u="${i}" placeholder="0"></td><td><input type="number" inputmode="decimal" step="any" min="0" data-m="${i}" placeholder="0"></td><td><select data-cat="${i}"><option>A</option><option>B</option><option>C</option></select></td></tr>`).join("")}</tbody></table><p class="note">Llena unidades, millones o las dos, según la meta de la marca. Millones en millones de pesos (ej.: 85,5 = $85.500.000). Un aliado sin unidades ni millones no verá esta meta volante.</p>${payEditor()}<label for="cond" style="margin-top:16px">Condiciones (corte, fecha de pago, con o sin IVA). Los asesores también las ven.</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar a aprobación</button></form>`;
-  if(S.tab==="dia"){const days=Object.entries(db.cal).filter(([k,b])=>b===m&&k.startsWith(S.mes)).map(([k])=>k).sort();
+  if(S.tab==="meta")return`<form class="card pn" id="f"><h2>Nueva meta volante de ${mesCorto(S.mes)}</h2><p class="mut">Formato único: objetivo, meta y categoría por aliado, pagos y condiciones.</p><div class="grid"><div><label for="obju">Objetivo total en unidades</label><input id="obju" type="number" inputmode="numeric" min="0" placeholder="0"></div><div><label for="objm">Objetivo total en millones</label><input id="objm" type="number" inputmode="decimal" step="any" min="0" placeholder="0"></div><div><label for="d1">Desde</label><input id="d1" type="date" value="${S.mes}-01" required></div><div><label for="d2">Hasta</label><input id="d2" type="date" value="${S.mes}-${lastDay(S.mes)}" required></div></div><h3 style="margin:18px 0 8px">Meta por aliado</h3><table class="stack"><thead><tr><th>Aliado</th><th>Unidades</th><th>Millones</th><th>Categoría</th></tr></thead><tbody>${ALIADOS.map((a,i)=>`<tr><td>${esc(a)}</td><td><input type="number" inputmode="numeric" min="0" data-u="${i}" placeholder="0"></td><td><input type="number" inputmode="decimal" step="any" min="0" data-m="${i}" placeholder="0"></td><td><select data-cat="${i}"><option>A</option><option>B</option><option>C</option></select></td></tr>`).join("")}</tbody></table><p class="note">Llena unidades, millones o las dos. Millones en millones de pesos (ej.: 85,5 = $85.500.000). Un aliado sin unidades ni millones no verá esta meta volante.</p>${payEditor()}<label for="cond" style="margin-top:16px">Condiciones (corte, fecha de pago, con o sin IVA). Los asesores también las ven.</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar a aprobación</button></form>`;
+  if(S.tab==="dia"){const days=myDays();
     if(!days.length)return`<div class="empty">TYT todavía no te ha asignado días de marca en ${mesCorto(S.mes)}. Cuando el jefe de canal te asigne días, aparecerán aquí.</div>`;
     if(!days.includes(S.dia))S.dia=days[0];
-    const st=k=>{const l=db.items.filter(i=>i.marca===m&&i.tipo==="dia"&&i.d.fecha===k);if(!l.length)return"Sin concurso";const c=e=>l.filter(i=>i.estado===e).length;return[c("aprobado")&&c("aprobado")+" aprobado",c("pendiente")&&c("pendiente")+" pendiente",c("rechazado")&&c("rechazado")+" rechazado"].filter(Boolean).join(" · ")};
+    const st=k=>{const l=db.items.filter(i=>i.tipo==="dia"&&i.d.fecha===k);if(!l.length)return"Sin concurso";const c=e=>l.filter(i=>i.estado===e).length;return[c("aprobado")&&c("aprobado")+" aprobado",c("pendiente")&&c("pendiente")+" pendiente",c("rechazado")&&c("rechazado")+" rechazado"].filter(Boolean).join(" · ")};
     return`<div class="card"><h2>Tus días de marca</h2><p class="mut">Elige el día y monta un concurso distinto para cada uno.</p><div class="days">${days.map(k=>`<button type="button" class="day${S.dia===k?" on":""}" data-day="${k}"><b>${fdate(k)}</b><span>${st(k)}</span></button>`).join("")}</div></div><form class="card pn" id="f"><h2>Concurso del ${fdate(S.dia)}</h2><p class="mut">Este concurso aplica solo para ese día.</p><input type="hidden" id="fecha" value="${S.dia}"><label for="tit">Nombre del concurso</label><input id="tit" required placeholder="Ej.: ${nom(m)} Day">${aliPick()}${payEditor()}<label for="cond" style="margin-top:16px">Condiciones (los asesores también las ven)</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar concurso del ${fdate(S.dia)} a aprobación</button></form>`}
-  return`<form class="card pn" id="f"><h2>Nueva oferta específica</h2><p class="mut">Incentivos puntuales, como “hoy pagamos $25.000 por esta referencia”.</p><div class="grid"><div style="grid-column:1/-1"><label for="tit">Título de la oferta</label><input id="tit" required></div><div><label for="d1">Desde</label><input id="d1" type="date" required></div><div><label for="d2">Hasta</label><input id="d2" type="date" required></div></div>${aliPick()}${payEditor()}<label for="cond" style="margin-top:16px">Condiciones (los asesores también las ven)</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar a aprobación</button></form>`;
+  return`<form class="card pn" id="f"><h2>Nueva oferta específica</h2><p class="mut">Incentivos puntuales, como “hoy pagamos $25.000 por esta referencia”.</p><div class="grid"><div style="grid-column:1/-1"><label for="tit">Título de la oferta</label><input id="tit" required></div><div><label for="d1">Desde</label><input id="d1" type="date" min="${S.mes}-01" max="${S.mes}-${lastDay(S.mes)}" required></div><div><label for="d2">Hasta</label><input id="d2" type="date" required></div></div>${aliPick()}${payEditor()}<label for="cond" style="margin-top:16px">Condiciones (los asesores también las ven)</label><textarea id="cond"></textarea><button class="btn" style="margin-top:14px;width:100%">Enviar a aprobación</button></form>`;
 }
 function viewBrand(){
   if(!["meta","dia","oferta"].includes(S.tab))S.tab="meta";
-  if(S.tab==="dia"){const ds=Object.entries(db.cal).filter(([k,b])=>b===S.user.name&&k.startsWith(S.mes)).map(([k])=>k).sort();if(!ds.includes(S.dia))S.dia=ds[0]||null}
-  const mine=db.items.filter(i=>enMes(i)&&i.marca===S.user.name&&i.tipo===S.tab&&(S.tab!=="dia"||i.d.fecha===S.dia)).sort((a,b)=>b.id-a.id);
-  const lg=`<div class="card row" style="justify-content:space-between"><div class="row">${logo(S.user.name,1)}<div><h3>${nom(S.user.name)}</h3><span class="mut">${db.logos[S.user.name]?"Este logo lo ven los jefes y los aliados.":"Sube el logo de tu marca (PNG o JPG)."}</span></div></div><label class="btn sec sm" style="margin:0;color:var(--ink)">${db.logos[S.user.name]?"Cambiar logo":"Subir logo"}<input type="file" id="logoin" accept="image/*" hidden></label></div>`;
-  return lg+tabs([["meta","Meta volante"],["dia","Días de marca"],["oferta","Ofertas"]])+(()=>{const f=brandForm();return f})()+`<h2 style="margin:22px 0 10px">${S.tab==="dia"&&S.dia?"Mis concursos del "+fdate(S.dia):"Mis envíos"}</h2>`+(mine.length?mine.map(i=>itemCard(i,"brand")).join(""):`<div class="empty">Aún no has enviado ${TIPOS[S.tab].toLowerCase()}.</div>`);
+  if(S.tab==="dia"){const ds=myDays();if(!ds.includes(S.dia))S.dia=ds[0]||null}
+  const mine=db.items.filter(i=>i.tipo===S.tab&&(S.tab!=="dia"||i.d.fecha===S.dia)).sort((a,b)=>ts(b)-ts(a));
+  const has=!!db.logos[S.user.name];
+  const lg=`<div class="card row" style="justify-content:space-between"><div class="row">${logo(S.user.name,1)}<div><h3>${nom(S.user.name)}</h3><span class="mut">${has?"Este logo lo ven los jefes, aliados y asesores.":"Sube el logo de tu marca (PNG o JPG)."}</span></div></div><label class="btn sec sm" style="margin:0;color:var(--ink)">${has?"Cambiar logo":"Subir logo"}<input type="file" id="logoin" accept="image/*" hidden></label></div>`;
+  return lg+tabs([["meta","Meta volante"],["dia","Días de marca"],["oferta","Ofertas"]])+brandForm()+`<h2 style="margin:22px 0 10px">${S.tab==="dia"&&S.dia?"Mis concursos del "+fdate(S.dia):"Mis envíos de "+mesCorto(S.mes)}</h2>`+(mine.length?mine.map(i=>itemCard(i,"brand")).join(""):`<div class="empty">Aún no has enviado ${({meta:"metas volantes",dia:"concursos",oferta:"ofertas"})[S.tab]} este mes.</div>`);
+}
+function viewUsuarios(){
+  const as=Object.entries(db.asesores).sort((x,y)=>(x[1].aliado||"").localeCompare(y[1].aliado||"")||(x[1].nombre||"").localeCompare(y[1].nombre||""));
+  const c=S.creados;
+  const tabla=c?`<div style="margin-top:14px">${c.done?"":`<p class="mut">Creando usuarios… ${c.prog} de ${c.total}</p>`}${c.rows.length?`<table class="stack"><thead><tr><th>Usuario</th><th>Contraseña</th></tr></thead><tbody>${c.rows.map(r=>`<tr><td>${esc(r.label)}</td><td>${r.pw?`<b style="font-family:monospace;font-size:16px">${r.pw}</b>`:`<span class="mut">${esc(r.err)}</span>`}</td></tr>`).join("")}</tbody></table>`:""}${c.done&&c.rows.some(r=>r.pw)?`<p class="note" style="color:var(--pki)"><b>Copia esta lista ahora:</b> las contraseñas no se vuelven a mostrar. Envía a cada usuario la suya por un canal privado.</p><button class="btn sec sm" data-act="copiar">Copiar lista</button>`:""}</div>`:"";
+  return`<div class="card pn"><h2>Crear usuarios</h2><p class="mut">Crea las cuentas de las 12 marcas, los 15 aliados y el otro jefe, cada una con una contraseña aleatoria. Las cuentas que ya existen no se tocan.</p><button class="btn" data-act="crear"${c&&!c.done?" disabled":""}>Crear usuarios que falten</button>${tabla}</div>
+  <div class="card"><h2>Si alguien olvida su contraseña</h2><ol style="margin:8px 0 0;padding-left:20px;line-height:1.7"><li>Entra a <b>console.firebase.google.com</b>, proyecto incentivos-tyt, <b>Authentication &gt; Usuarios</b>.</li><li>Busca su usuario y elimínalo. Marcas: <code>m.oppo@${DOM}</code> · Aliados: <code>a.cos-bogota@${DOM}</code> · Asesores: <code>cédula@asesor.${DOM}</code>.</li><li>Marcas y aliados: vuelve aquí y pulsa <b>Crear usuarios que falten</b> para darle una contraseña nueva.</li><li>Asesores: borra también su ficha en <b>Firestore &gt; asesores</b> y pídele que se registre de nuevo.</li></ol></div>
+  <div class="card"><h2>Asesores registrados (${as.length})</h2>${as.length?`<table class="stack" style="margin-top:8px"><thead><tr><th>Nombre</th><th>Cédula</th><th>Aliado</th><th>Registro</th></tr></thead><tbody>${as.map(([k,x])=>`<tr><td>${esc(x.nombre)}</td><td>${esc(k)}</td><td>${esc(x.aliado)}</td><td>${fdate(x.creado)}</td></tr>`).join("")}</tbody></table>`:`<p class="mut">Aún no hay asesores registrados.</p>`}</div>`;
 }
 function viewJefe(){
-  const cnt=e=>db.items.filter(i=>enMes(i)&&i.estado===e).length;
+  const cnt=e=>db.items.filter(i=>i.estado===e).length;
   let h=tabs([["pendiente",`Pendientes (${cnt("pendiente")})`],["aprobado",`Aprobados (${cnt("aprobado")})`],["rechazado",`Rechazados (${cnt("rechazado")})`],["cal","Calendario"],["usr","Usuarios"]]);
-  if(S.tab==="usr"){const g=(t,arr,f)=>`<optgroup label="${t}">${arr.map(x=>`<option value="${f}|${esc(x)}">${f==="brand"?nom(x):esc(x)} ${db.pw[f+"|"+x]?"· propia":"· inicial"}</option>`).join("")}</optgroup>`;const as=Object.entries(db.asesores).sort((x,y)=>x[1].aliado.localeCompare(y[1].aliado)||x[1].nombre.localeCompare(y[1].nombre));
-    return h+`<form class="card pn" id="frst"><h2>Restablecer contraseña</h2><p class="mut">Si una marca, un aliado, un asesor o el otro jefe olvida su contraseña, vuelve a quedar en 1234 y debe cambiarla al entrar.</p><label for="ru">Usuario</label><select id="ru">${g("Marcas",MARCAS,"brand")}${g("Jefes de canal",JEFES,"jefe")}${g("Aliados",ALIADOS,"ali")}${as.length?`<optgroup label="Asesores">${as.map(([c,x])=>`<option value="ase|${c}">${esc(x.nombre)} (${c}) · ${esc(x.aliado)}</option>`).join("")}</optgroup>`:""}</select><button class="btn" style="margin-top:12px">Restablecer a 1234</button></form><div class="card"><h2>Asesores registrados (${as.length})</h2>${as.length?`<table class="stack" style="margin-top:8px"><thead><tr><th>Nombre</th><th>Cédula</th><th>Aliado</th><th>Registro</th></tr></thead><tbody>${as.map(([c,x])=>`<tr><td>${esc(x.nombre)}</td><td>${c}</td><td>${esc(x.aliado)}</td><td>${fdate(x.creado)}</td></tr>`).join("")}</tbody></table>`:`<p class="mut">Aún no hay asesores registrados.</p>`}</div>`}
-  if(S.tab==="cal")return h+`<div class="card"><h2>Días de marca · ${mesCorto(S.mes)}</h2><p class="note" style="margin-bottom:10px">Calendario de ejemplo mientras llega el real.</p>${calendar()}</div><form class="card pn" id="fcal"><h3>Asignar o quitar un día</h3><div class="grid" style="margin-top:8px"><div><label for="cd">Día</label><input id="cd" type="date" min="${S.mes}-01" max="${S.mes}-${lastDay(S.mes)}" value="${S.mes}-01"></div><div><label for="cm">Marca</label><select id="cm"><option value="">— Sin marca —</option>${MARCAS.map(m=>`<option value="${m}">${nom(m)}</option>`).join("")}</select></div></div><button class="btn" style="margin-top:12px">Guardar día</button></form>`;
-  const l=db.items.filter(i=>enMes(i)&&i.estado===S.tab).sort((a,b)=>b.id-a.id);
-  return h+(l.length?l.map(i=>itemCard(i,"jefe")).join(""):`<div class="empty">No hay incentivos ${S.tab==="pendiente"?"pendientes por revisar":S.tab+"s"}.</div>`);
+  if(S.tab==="usr")return h+viewUsuarios();
+  if(S.tab==="cal")return h+`<div class="card"><h2>Días de marca · ${mesCorto(S.mes)}</h2>${calendar()}</div><form class="card pn" id="fcal"><h3>Asignar o quitar un día</h3><div class="grid" style="margin-top:8px"><div><label for="cd">Día</label><input id="cd" type="date" min="${S.mes}-01" max="${S.mes}-${lastDay(S.mes)}" value="${S.mes}-01"></div><div><label for="cm">Marca</label><select id="cm"><option value="">— Sin marca —</option>${MARCAS.map(m=>`<option value="${m}">${nom(m)}</option>`).join("")}</select></div></div><button class="btn" style="margin-top:12px">Guardar día</button></form>`;
+  const l=db.items.filter(i=>i.estado===S.tab).sort((a,b)=>ts(b)-ts(a));
+  return h+(l.length?l.map(i=>itemCard(i,"jefe")).join(""):`<div class="empty">No hay incentivos ${S.tab==="pendiente"?"pendientes por revisar":S.tab+"s"} en ${mesCorto(S.mes)}.</div>`);
 }
+const linBtns=()=>`<div class="tabs" style="margin:0">${["Todas","Terminales","Tecnología"].map(x=>`<button class="tab" aria-selected="${S.lin===x}" data-lin="${x}">${x}</button>`).join("")}</div>`;
 function viewAli(){
-  const a=S.user.name;
-  const vis=db.items.filter(i=>enMes(i)&&i.estado==="aprobado"&&forAli(i,a)&&(S.lin==="Todas"||linea(i.marca)===S.lin));
-  let h=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><h1>Mis incentivos de ${mesCorto(S.mes)}</h1><div class="tabs" style="margin:0">${["Todas","Terminales","Tecnología"].map(x=>`<button class="tab" aria-selected="${S.lin===x}" data-lin="${x}">${x}</button>`).join("")}</div></div>`;
-  h+=tabs([["meta","Meta volante"],["dia","Días de marca"],["oferta","Ofertas"]]);
+  const a=S.user.name,vis=db.items.filter(i=>forAli(i,a)&&(S.lin==="Todas"||linea(i.marca)===S.lin));
+  let h=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><h1>Mis incentivos de ${mesCorto(S.mes)}</h1>${linBtns()}</div>`+tabs([["meta","Meta volante"],["dia","Días de marca"],["oferta","Ofertas"]]);
   const l=vis.filter(i=>i.tipo===S.tab).sort((x,y)=>S.tab==="dia"?x.d.fecha.localeCompare(y.d.fecha):0);
   if(S.tab==="meta"&&l.length){const tu=l.reduce((s,i)=>s+mU(i.d.metas[a]),0),tm=l.reduce((s,i)=>s+mM(i.d.metas[a]),0);
-    h+=`<div class="card pn"><div class="row" style="justify-content:space-between;align-items:flex-end"><div><span class="mut">Todas mis metas volantes (unidades y millones se suman por separado)</span><div class="row" style="gap:24px">${tu?`<div class="big">${num(tu)} <span style="font-size:18px">und</span></div>`:""}${tm?`<div class="big">$${num(tm)} <span style="font-size:18px">millones</span></div>`:""}</div></div><span class="mut">${l.length} marca${l.length>1?"s":""} aprobada${l.length>1?"s":""}</span></div><table class="stack" style="margin-top:12px"><thead><tr><th>Marca</th><th>Línea</th><th class="n">Unidades</th><th class="n">Millones</th><th>Categoría</th><th>Vigencia</th></tr></thead><tbody>${l.map(i=>`<tr><td><span class="row" style="gap:8px">${logo(i.marca)}${nom(i.marca)}</span></td><td>${linea(i.marca)}</td><td class="n">${mU(i.d.metas[a])?num(mU(i.d.metas[a])):""}</td><td class="n">${mM(i.d.metas[a])?"$"+num(mM(i.d.metas[a]))+" M":""}</td><td>${esc(i.d.metas[a].cat)}</td><td>${fdate(i.d.desde)} – ${fdate(i.d.hasta)}</td></tr>`).join("")}</tbody></table><p class="note">Abajo está el detalle de pagos de cada marca. Solo aparecen las metas ya aprobadas por el jefe de canal.</p></div>`}
+    h+=`<div class="card pn"><div class="row" style="justify-content:space-between;align-items:flex-end"><div><span class="mut">Todas mis metas volantes (unidades y millones se suman por separado)</span><div class="row" style="gap:24px">${tu?`<div class="big">${num(tu)} <span style="font-size:18px">und</span></div>`:""}${tm?`<div class="big">$${num(tm)} <span style="font-size:18px">millones</span></div>`:""}</div></div><span class="mut">${l.length} marca${l.length>1?"s":""}</span></div><table class="stack" style="margin-top:12px"><thead><tr><th>Marca</th><th>Línea</th><th class="n">Unidades</th><th class="n">Millones</th><th>Categoría</th><th>Vigencia</th></tr></thead><tbody>${l.map(i=>{const m=i.d.metas[a];return`<tr><td><span class="row" style="gap:8px">${logo(i.marca)}${nom(i.marca)}</span></td><td>${linea(i.marca)}</td><td class="n">${mU(m)?num(mU(m)):""}</td><td class="n">${mM(m)?"$"+num(mM(m))+" M":""}</td><td>${esc(m.cat)}</td><td>${fdate(i.d.desde)} – ${fdate(i.d.hasta)}</td></tr>`}).join("")}</tbody></table><p class="note">Abajo está el detalle de pagos de cada marca.</p></div>`}
   if(S.tab==="dia")h+=`<div class="card"><h3 style="margin-bottom:10px">Calendario de días de marca</h3>${calendar()}</div>`;
-  h+=l.length?l.map(i=>itemCard(i,"ali")).join(""):`<div class="empty">No tienes ${TIPOS[S.tab].toLowerCase()} aprobadas${S.lin!=="Todas"?" en "+S.lin:""} por ahora.</div>`;
-  return h;
+  return h+(l.length?l.map(i=>itemCard(i,"ali")).join(""):`<div class="empty">No tienes ${({meta:"metas volantes",dia:"días de marca",oferta:"ofertas"})[S.tab]} aprobadas${S.lin!=="Todas"?" en "+S.lin:""} en ${mesCorto(S.mes)}.</div>`);
 }
 function aseCard(it,ali){
-  const d=it.d,rows=d.pagos.filter(p=>p.ase>0);
-  const head=`<div class="row" style="justify-content:space-between"><div class="row">${logo(it.marca)}<h3>${nom(it.marca)}${it.tipo!=="meta"?" · "+esc(d.titulo):""}</h3></div><span class="tag">${linea(it.marca)}</span></div>`;
-  const when=it.tipo==="dia"?fdate(d.fecha):fdate(d.desde)+" – "+fdate(d.hasta);
+  const d=it.d,rows=(d.pagos||[]).filter(p=>p.ase>0),when=it.tipo==="dia"?fdate(d.fecha):fdate(d.desde)+" – "+fdate(d.hasta);
   const intro=it.tipo==="meta"?`<p style="margin:8px 0">Si <b>${esc(ali)}</b> cumple su meta volante con ${nom(it.marca)}, ganas por cada venta:</p>`:`<p style="margin:8px 0">Ganas por cada venta:</p>`;
-  return`<div class="card">${head}<p class="mut" style="margin:4px 0 0">${when}</p>${intro}${rows.length?`<table class="stack"><thead><tr><th>Referencia</th><th class="n">Tú ganas</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${esc(p.ref)}</td><td class="n"><b>${money(p.ase)}</b></td></tr>`).join("")}</tbody></table>`:`<p class="mut">Esta marca no definió pago para asesores en este incentivo.</p>`}${d.cond?`<p class="note"><b>Condiciones:</b> ${esc(d.cond)}</p>`:""}</div>`;
+  return`<div class="card"><div class="row" style="justify-content:space-between"><div class="row">${logo(it.marca)}<h3>${nom(it.marca)}${it.tipo!=="meta"?" · "+esc(d.titulo):""}</h3></div><span class="tag">${linea(it.marca)}</span></div><p class="mut" style="margin:4px 0 0">${when}</p>${intro}${rows.length?`<table class="stack"><thead><tr><th>Referencia</th><th class="n">Tú ganas</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${esc(p.ref)}</td><td class="n"><b>${money(p.ase)}</b></td></tr>`).join("")}</tbody></table>`:`<p class="mut">Esta marca no definió pago para asesores en este incentivo.</p>`}${d.cond?`<p class="note"><b>Condiciones:</b> ${esc(d.cond)}</p>`:""}</div>`;
 }
 function viewAse(){
-  const me=db.asesores[S.user.name];if(!me)return`<div class="empty">Tu usuario ya no existe. Sal y regístrate de nuevo.</div>`;
-  const a=me.aliado;
-  const vis=db.items.filter(i=>enMes(i)&&i.estado==="aprobado"&&forAli(i,a)&&(S.lin==="Todas"||linea(i.marca)===S.lin));
-  let h=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><h1>Lo que puedes ganar en ${mesCorto(S.mes)}</h1><div class="tabs" style="margin:0">${["Todas","Terminales","Tecnología"].map(x=>`<button class="tab" aria-selected="${S.lin===x}" data-lin="${x}">${x}</button>`).join("")}</div></div>`;
-  h+=tabs([["meta","Metas volantes"],["dia","Días de marca"],["oferta","Ofertas"]]);
+  if(!db.me)return`<div class="empty">No encontramos tu ficha de asesor. Sal y regístrate de nuevo, o pide ayuda al jefe de canal.</div>`;
+  const a=db.me.aliado,vis=db.items.filter(i=>forAli(i,a)&&(S.lin==="Todas"||linea(i.marca)===S.lin));
+  let h=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><h1>Lo que puedes ganar en ${mesCorto(S.mes)}</h1>${linBtns()}</div>`+tabs([["meta","Metas volantes"],["dia","Días de marca"],["oferta","Ofertas"]]);
   const l=vis.filter(i=>i.tipo===S.tab).sort((x,y)=>S.tab==="dia"?x.d.fecha.localeCompare(y.d.fecha):0);
   if(S.tab==="meta")h+=`<p class="note" style="margin:0 0 12px">Estos pagos aplican solo si tu aliado cumple la meta volante de cada marca.</p>`;
   if(S.tab==="dia")h+=`<div class="card"><h3 style="margin-bottom:10px">Calendario de días de marca</h3>${calendar()}</div>`;
   return h+(l.length?l.map(i=>aseCard(i,a)).join(""):`<div class="empty">No hay ${({meta:"metas volantes",dia:"días de marca",oferta:"ofertas"})[S.tab]} para ti en ${mesCorto(S.mes)}${S.lin!=="Todas"?" en "+S.lin:""}.</div>`);
 }
 function viewLogin(){
-  const opt=(g,arr,f)=>`<optgroup label="${g}">${arr.map(x=>`<option value="${f}|${esc(x)}">${f==="brand"?nom(x):esc(x)}</option>`).join("")}</optgroup>`;
-  const mode=S.login||"std";
+  const opt=(g,arr,f)=>`<optgroup label="${g}">${arr.map(x=>`<option value="${f}|${esc(x)}">${f==="brand"?nom(x):esc(x)}</option>`).join("")}</optgroup>`,mode=S.login;
   const sw=`<div class="tabs" style="margin-bottom:14px"><button type="button" class="tab" aria-selected="${mode==="std"}" data-login="std">Marca, jefe o aliado</button><button type="button" class="tab" aria-selected="${mode!=="std"}" data-login="ase">Soy asesor</button></div>`;
-  const foot=`<div class="row" style="margin-top:10px"><button type="button" class="btn sec sm" data-act="reset">Restablecer datos de ejemplo</button><a class="btn sec sm" style="text-decoration:none;display:inline-flex;align-items:center" href="presentacion.pdf" target="_blank" rel="noopener">Ver presentación (PDF)</a></div>`;
+  const foot=`<div class="row" style="margin-top:10px"><a class="btn sec sm" style="text-decoration:none;display:inline-flex;align-items:center" href="presentacion.pdf" target="_blank" rel="noopener">Ver presentación (PDF)</a></div>`;
   let body;
-  if(mode==="std")body=`<form id="flog"><p class="mut" style="margin-top:0">Cada marca ve solo lo suyo, los jefes de canal aprueban y cada aliado ve únicamente sus incentivos aprobados.</p><label for="u">Usuario</label><select id="u">${opt("Marcas",MARCAS,"brand")}${opt("Jefes de canal",JEFES,"jefe")}${opt("Aliados",ALIADOS,"ali")}</select><label for="pw" style="margin-top:12px">Contraseña</label><input id="pw" type="password" autocomplete="current-password" placeholder="Tu contraseña"><button class="btn" style="width:100%;margin-top:16px">Entrar</button><p class="note">La contraseña inicial es 1234; cámbiala al entrar con el botón Contraseña. Si la olvidas, un jefe de canal puede restablecerla. Los incentivos precargados son datos de ejemplo.</p></form>`;
-  else if(mode==="ase")body=`<form id="flogase"><p class="mut" style="margin-top:0">Consulta los días de marca, las ofertas y lo que puedes ganar si tu aliado cumple las metas volantes.</p><label for="ced">Número de cédula</label><input id="ced" inputmode="numeric" autocomplete="username" placeholder="Solo números" required><label for="pwa" style="margin-top:12px">Contraseña</label><input id="pwa" type="password" autocomplete="current-password" required><button class="btn" style="width:100%;margin-top:16px">Entrar</button><p class="note">¿Primera vez? <button type="button" class="btn sec sm" data-login="reg">Registrarme</button></p><p class="note">Asesor de ejemplo: cédula 1000000001, contraseña 1234.</p></form>`;
-  else body=`<form id="freg"><p class="mut" style="margin-top:0">Regístrate una sola vez con tu cédula.</p><label for="rced">Número de cédula</label><input id="rced" inputmode="numeric" placeholder="Solo números" required><label for="rnom" style="margin-top:12px">Nombre completo</label><input id="rnom" autocomplete="name" required><label for="rali" style="margin-top:12px">Aliado donde trabajas</label><select id="rali"><option value="">Elige tu aliado</option>${ALIADOS.map(a=>`<option>${esc(a)}</option>`).join("")}</select><label for="rp1" style="margin-top:12px">Crea una contraseña</label><input id="rp1" type="password" autocomplete="new-password" minlength="6" required><label for="rp2" style="margin-top:12px">Repite la contraseña</label><input id="rp2" type="password" autocomplete="new-password" minlength="6" required><label class="chk" style="margin-top:14px;align-items:flex-start"><input type="checkbox" id="rok"> Autorizo el tratamiento de mis datos personales para consultar los incentivos.</label><button class="btn" style="width:100%;margin-top:16px">Crear mi usuario</button><p class="note"><button type="button" class="btn sec sm" data-login="ase">Ya tengo usuario</button></p></form>`;
+  if(mode==="std")body=`<form id="flog"><p class="mut" style="margin-top:0">Cada marca ve solo lo suyo, los jefes de canal aprueban y cada aliado ve únicamente sus incentivos aprobados.</p><label for="u">Usuario</label><select id="u">${opt("Marcas",MARCAS,"brand")}${opt("Jefes de canal",JEFES,"jefe")}${opt("Aliados",ALIADOS,"ali")}</select><label for="pw" style="margin-top:12px">Contraseña</label><input id="pw" type="password" autocomplete="current-password" required><button class="btn" style="width:100%;margin-top:16px">Entrar</button><p class="note">Tu contraseña te la entrega el jefe de canal. Si la olvidas, pídele que la restablezca.</p></form>`;
+  else if(mode==="ase")body=`<form id="flogase"><p class="mut" style="margin-top:0">Consulta los días de marca, las ofertas y lo que puedes ganar si tu aliado cumple las metas volantes.</p><label for="ced">Número de cédula</label><input id="ced" inputmode="numeric" autocomplete="username" placeholder="Solo números" required><label for="pwa" style="margin-top:12px">Contraseña</label><input id="pwa" type="password" autocomplete="current-password" required><button class="btn" style="width:100%;margin-top:16px">Entrar</button><p class="note">¿Primera vez? <button type="button" class="btn sec sm" data-login="reg">Registrarme</button></p></form>`;
+  else body=`<form id="freg"><p class="mut" style="margin-top:0">Regístrate una sola vez con tu cédula.</p><label for="rced">Número de cédula</label><input id="rced" inputmode="numeric" placeholder="Solo números" required><label for="rnom" style="margin-top:12px">Nombre completo</label><input id="rnom" autocomplete="name" maxlength="80" required><label for="rali" style="margin-top:12px">Aliado donde trabajas</label><select id="rali"><option value="">Elige tu aliado</option>${ALIADOS.map(a=>`<option>${esc(a)}</option>`).join("")}</select><label for="rp1" style="margin-top:12px">Crea una contraseña</label><input id="rp1" type="password" autocomplete="new-password" minlength="6" required><label for="rp2" style="margin-top:12px">Repite la contraseña</label><input id="rp2" type="password" autocomplete="new-password" minlength="6" required><label class="chk" style="margin-top:14px;align-items:flex-start"><input type="checkbox" id="rok"> Autorizo el tratamiento de mis datos personales para consultar los incentivos.</label><button class="btn" style="width:100%;margin-top:16px">Crear mi usuario</button><p class="note"><button type="button" class="btn sec sm" data-login="ase">Ya tengo usuario</button></p></form>`;
   return`<div class="top"><b>Incentivos TYT</b><span>Metas volantes · Días de marca · Ofertas</span></div><div class="wrap"><div class="card login"><h1 style="margin-bottom:12px">${mode==="reg"?"Registro de asesor":"Ingresar"}</h1>${sw}${body}${foot}</div></div>`;
 }
 function pwPanel(){
   if(S.pw)return`<form class="card pn" id="fpw"><h2>Cambiar contraseña</h2><div class="grid" style="margin-top:10px"><div><label for="p0">Contraseña actual</label><input id="p0" type="password" autocomplete="current-password" required></div><div><label for="p1">Nueva contraseña</label><input id="p1" type="password" autocomplete="new-password" minlength="6" required></div><div><label for="p2">Repite la nueva</label><input id="p2" type="password" autocomplete="new-password" minlength="6" required></div></div><p class="note">Mínimo 6 caracteres.</p><div class="row" style="margin-top:12px"><button class="btn">Guardar contraseña</button><button type="button" class="btn sec" data-act="pw-x">Cancelar</button></div></form>`;
-  if(!db.pw[ukey()])return`<div class="card row" style="justify-content:space-between;background:var(--am);border-color:transparent"><span style="color:var(--ami);font-weight:600">Estás usando la contraseña inicial 1234. Cámbiala por una propia.</span><button class="btn sm" data-act="pw">Cambiar ahora</button></div>`;
+  if(!db.perfil?.cambiada)return`<div class="card row" style="justify-content:space-between;background:var(--am);border-color:transparent"><span style="color:var(--ami);font-weight:600">Estás usando la contraseña que te entregaron. Cámbiala por una propia.</span><button class="btn sm" data-act="pw">Cambiar ahora</button></div>`;
   return"";
 }
-function mesBar(){return`<div class="mesbar"><label for="mes">Mes</label><select id="mes">${meses().map(m=>`<option value="${m}"${m===S.mes?" selected":""}>${mesLabel(m)}${m===hoyMes()?" (actual)":""}${m<hoyMes()?" · cerrado":""}</option>`).join("")}</select></div>`}
+const mesBar=()=>`<div class="mesbar"><label for="mes">Mes</label><select id="mes">${meses().map(m=>`<option value="${m}"${m===S.mes?" selected":""}>${mesLabel(m)}${m===hoyMes()?" (actual)":""}${m<hoyMes()?" · cerrado":""}</option>`).join("")}</select><button class="btn sec sm" data-act="reload">Actualizar</button></div>`;
 function render(){
-  if(!S.mes)S.mes=defMes();
   if(!S.user){app.innerHTML=viewLogin();return}
   const r={brand:"Marca",jefe:"Jefe de canal",ali:"Aliado",ase:"Asesor"}[S.user.role];
-  const n=S.user.role==="brand"?nom(S.user.name):S.user.role==="ase"?(db.asesores[S.user.name]?.nombre||"")+" · "+(db.asesores[S.user.name]?.aliado||""):S.user.name;
+  const n=S.user.role==="brand"?nom(S.user.name):S.user.role==="ase"?(db.me?db.me.nombre+" · "+db.me.aliado:S.user.name):S.user.name;
   app.innerHTML=`<div class="top"><b>Incentivos TYT</b><div class="who"><span>${r}: <b>${esc(n)}</b></span><button class="btn sm" data-act="pw">Contraseña</button><button class="btn sm" data-act="out">Salir</button></div></div><div class="wrap">${mesBar()}${pwPanel()}${S.user.role==="brand"?viewBrand():S.user.role==="jefe"?viewJefe():S.user.role==="ase"?viewAse():viewAli()}</div>`;
 }
+
+/* ---------- eventos ---------- */
 const readPays=()=>[...document.querySelectorAll("#pays tbody tr")].map(tr=>({ref:tr.querySelector("[name=ref]").value.trim(),ali:+tr.querySelector("[name=ali]").value||0,staff:+tr.querySelector("[name=staff]").value||0,ase:+tr.querySelector("[name=ase]").value||0})).filter(r=>r.ref);
 const readAlis=()=>document.getElementById("todos").checked?"todos":[...document.querySelectorAll("#alis input:checked")].map(i=>i.value);
 const v=id=>document.getElementById(id).value;
 
 app.addEventListener("submit",async e=>{
   e.preventDefault();const f=e.target;
-  if(f.id==="flog"){if(!(await checkPw(v("u"),v("pw")))){toast("Contraseña incorrecta");return}const[role,name]=v("u").split("|");S.pw=false;S.user={role,name};S.tab=null;S.dia=null;S.lin="Todas";render();window.scrollTo(0,0);return}
-  if(f.id==="flogase"){const c=v("ced").replace(/\D/g,"");if(!db.asesores[c]||!(await checkPw("ase|"+c,v("pwa")))){toast("Cédula o contraseña incorrecta");return}S.user={role:"ase",name:c};S.tab=null;S.dia=null;S.lin="Todas";S.pw=false;render();window.scrollTo(0,0);return}
+  if(f.id==="flog"){const[r,n]=v("u").split("|");await act(()=>signInWithEmailAndPassword(auth,emailOf(r,n),v("pw")));return}
+  if(f.id==="flogase"){const c=v("ced").replace(/\D/g,"");if(c.length<6){toast("Escribe tu cédula completa");return}await act(()=>signInWithEmailAndPassword(auth,emailOf("ase",c),v("pwa")));return}
   if(f.id==="freg"){const c=v("rced").replace(/\D/g,""),nm=v("rnom").trim(),al=v("rali");
     if(c.length<6||c.length>10){toast("La cédula debe tener entre 6 y 10 números");return}
-    if(db.asesores[c]){toast("Esta cédula ya está registrada. Ingresa con tu contraseña.");return}
     if(nm.length<5){toast("Escribe tu nombre completo");return}if(!al){toast("Elige tu aliado");return}
-    if(v("rp1").length<6){toast("La contraseña debe tener mínimo 6 caracteres");return}if(v("rp1")!==v("rp2")){toast("Las contraseñas no coinciden");return}if(v("rp1")==="1234"){toast("Usa una contraseña distinta a 1234");return}
+    if(v("rp1").length<6){toast("La contraseña debe tener mínimo 6 caracteres");return}if(v("rp1")!==v("rp2")){toast("Las contraseñas no coinciden");return}
     if(!document.getElementById("rok").checked){toast("Debes autorizar el tratamiento de datos");return}
-    const t=new Date();db.asesores[c]={nombre:nm,aliado:al,creado:t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0")};db.pw["ase|"+c]=await hash(v("rp1"));save();
-    S.user={role:"ase",name:c};S.tab=null;S.lin="Todas";S.login="ase";render();toast("¡Listo! Ya quedaste registrado");return}
-  if(f.id==="fpw"){if(!(await checkPw(ukey(),v("p0")))){toast("La contraseña actual no es correcta");return}if(v("p1").length<6){toast("Mínimo 6 caracteres");return}if(v("p1")!==v("p2")){toast("Las contraseñas nuevas no coinciden");return}if(v("p1")==="1234"){toast("Usa una contraseña distinta a 1234");return}db.pw[ukey()]=await hash(v("p1"));save();S.pw=false;render();toast("Contraseña actualizada");return}
-  if(f.id==="frst"){const k=v("ru");delete db.pw[k];save();render();toast("Contraseña restablecida a 1234");return}
-  if(f.id==="fcal"){const k=v("cd"),m=v("cm");if(!k)return;if(m)db.cal[k]=m;else delete db.cal[k];save();render();toast(m?`${fdate(k)} asignado a ${nom(m)}`:`${fdate(k)} quedó libre`);return}
+    S.registering=true;
+    await act(async()=>{
+      const cr=await createUserWithEmailAndPassword(auth,emailOf("ase",c),v("rp1"));
+      await setDoc(doc(fs,"asesores",c),{nombre:nm,aliado:al,as:slug(al),creado:hoyISO()});
+      await setDoc(doc(fs,"perfil",cr.user.uid),{cambiada:true});
+      S.registering=false;S.login="ase";await startSession(cr.user);
+    },"¡Listo! Ya quedaste registrado");
+    if(S.registering){S.registering=false;if(auth.currentUser&&!S.user)await startSession(auth.currentUser)}
+    return}
+  if(f.id==="fpw"){if(v("p1").length<6){toast("Mínimo 6 caracteres");return}if(v("p1")!==v("p2")){toast("Las contraseñas nuevas no coinciden");return}
+    await act(async()=>{const u=auth.currentUser;await reauthenticateWithCredential(u,EmailAuthProvider.credential(u.email,v("p0")));await updatePassword(u,v("p1"));await setDoc(doc(fs,"perfil",u.uid),{cambiada:true});db.perfil={cambiada:true};S.pw=false;render()},"Contraseña actualizada");return}
+  if(f.id==="fcal"){const k=v("cd"),m=v("cm");if(!k)return;
+    await act(async()=>{if(m)await setDoc(doc(fs,"cal",k),{marca:m});else await deleteDoc(doc(fs,"cal",k));if(m)db.cal[k]=m;else delete db.cal[k];render()},m?`${fdate(k)} asignado a ${nom(m)}`:`${fdate(k)} quedó libre`);return}
   if(f.id==="f"){
     const pagos=readPays();if(!pagos.length){toast("Agrega al menos una referencia con su pago");return}
-    let d={pagos,cond:v("cond").trim()};
-    if(S.tab==="meta"){const metas={};ALIADOS.forEach((a,i)=>metas[a]={und:parseFloat(document.querySelector(`[data-u="${i}"]`).value)||0,mill:parseFloat(document.querySelector(`[data-m="${i}"]`).value)||0,cat:document.querySelector(`[data-cat="${i}"]`).value});
-      if(!Object.values(metas).some(hasM)){toast("Asigna meta al menos a un aliado");return}
+    const d={pagos,cond:v("cond").trim()};
+    if(S.tab==="meta"){const metas={};ALIADOS.forEach((a,i)=>{const m={und:parseFloat(document.querySelector(`[data-u="${i}"]`).value)||0,mill:parseFloat(document.querySelector(`[data-m="${i}"]`).value)||0,cat:document.querySelector(`[data-cat="${i}"]`).value};if(hasM(m))metas[a]=m});
+      if(!Object.keys(metas).length){toast("Asigna meta al menos a un aliado");return}
       Object.assign(d,{objU:parseFloat(v("obju"))||0,objM:parseFloat(v("objm"))||0,desde:v("d1"),hasta:v("d2"),metas})}
     else{const al=readAlis();if(al!=="todos"&&!al.length){toast("Elige al menos un aliado");return}
       Object.assign(d,{titulo:v("tit").trim(),aliados:al},S.tab==="dia"?{fecha:v("fecha")}:{desde:v("d1"),hasta:v("d2")})}
-    db.items.push({id:db.next++,marca:S.user.name,tipo:S.tab,estado:"pendiente",d});save();render();toast("Enviado. Queda pendiente de aprobación.");
+    const it={ms:slug(S.user.name),marca:S.user.name,tipo:S.tab,estado:"pendiente",d,creado:serverTimestamp()};it.mes=mesOf(it);
+    await act(async()=>{await addDoc(collection(fs,"items"),it);await loadMonth();render()},it.mes===S.mes?"Enviado. Queda pendiente de aprobación.":`Enviado a ${mesLabel(it.mes)}. Queda pendiente de aprobación.`);
   }
 });
-app.addEventListener("click",e=>{
+app.addEventListener("click",async e=>{
   const t=e.target.closest("[data-tab],[data-lin],[data-act],[data-day],[data-login]");if(!t)return;
   if(t.dataset.tab){S.tab=t.dataset.tab;S.rej=null;render();return}
   if(t.dataset.login){S.login=t.dataset.login;render();return}
   if(t.dataset.day){S.dia=t.dataset.day;render();return}
   if(t.dataset.lin){S.lin=t.dataset.lin;render();return}
-  const a=t.dataset.act,id=+t.dataset.id,it=db.items.find(i=>i.id===id);
-  if(a==="out"){S.user=null;S.pw=false;render()}
+  const a=t.dataset.act,id=t.dataset.id,it=db.items.find(i=>i.id===id);
+  if(a==="out")await signOut(auth);
   else if(a==="pw"){S.pw=true;render();window.scrollTo(0,0);document.getElementById("p0")?.focus()}
   else if(a==="pw-x"){S.pw=false;render()}
-  else if(a==="reset"){const pw=db.pw,as=db.asesores;db=seed();db.pw=pw;db.asesores={...db.asesores,...as};save();toast("Datos de ejemplo restablecidos")}
+  else if(a==="reload")await act(reload,"Datos actualizados");
   else if(a==="addrow")document.querySelector("#pays tbody").insertAdjacentHTML("beforeend",payRow());
-  else if(a==="delrow"){const rows=document.querySelectorAll("#pays tbody tr");if(rows.length>1)t.closest("tr").remove()}
-  else if(a==="ok"){it.estado="aprobado";it.por=S.user.name;it.coment="";save();render();toast(`${nom(it.marca)} aprobado y publicado para los aliados`)}
+  else if(a==="delrow"){if(document.querySelectorAll("#pays tbody tr").length>1)t.closest("tr").remove()}
+  else if(a==="ok"&&it)await act(async()=>{await aprobar(it);it.estado="aprobado";it.por=S.user.name;it.coment="";render()},`${nom(it.marca)} aprobado y publicado`);
   else if(a==="rej"){S.rej=id;render();document.getElementById("rc")?.focus()}
   else if(a==="rej-x"){S.rej=null;render()}
-  else if(a==="rej-ok"){it.estado="rechazado";it.por=S.user.name;it.coment=v("rc").trim()||"Sin comentario";S.rej=null;save();render();toast("Rechazado. La marca verá el comentario.")}
+  else if(a==="rej-ok"&&it){const c=v("rc").trim()||"Sin comentario";await act(async()=>{await updateDoc(doc(fs,"items",id),{estado:"rechazado",por:S.user.name,coment:c});it.estado="rechazado";it.por=S.user.name;it.coment=c;S.rej=null;render()},"Rechazado. La marca verá el comentario.")}
+  else if(a==="crear"){if(S.creados&&!S.creados.done)return;try{await crearUsuarios()}catch(e){console.error(e);toast(errMsg(e))}}
+  else if(a==="copiar"){const txt=S.creados.rows.filter(r=>r.pw).map(r=>`${r.label}: ${r.pw}`).join("\n");try{await navigator.clipboard.writeText(txt);toast("Lista copiada")}catch(e){toast("No se pudo copiar. Selecciona la tabla y cópiala a mano.")}}
 });
-app.addEventListener("change",e=>{
-  if(e.target.id==="mes"){S.mes=e.target.value;S.dia=null;S.rej=null;render();return}
+app.addEventListener("change",async e=>{
+  if(e.target.id==="mes"){S.mes=e.target.value;S.dia=null;S.rej=null;await act(async()=>{await loadMonth();render()});return}
+  if(e.target.id==="todos"){document.getElementById("alis").hidden=e.target.checked;return}
+  if(e.target.id==="logoin"){const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,160/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext("2d").drawImage(im,0,0,c.width,c.height);const data=c.toDataURL("image/png");act(async()=>{await setDoc(doc(fs,"logos",slug(S.user.name)),{data});db.logos[S.user.name]=data;render()},"Logo actualizado")};im.onerror=()=>toast("No se pudo leer la imagen");im.src=r.result};r.readAsDataURL(file)}
+});
 
-  if(e.target.id==="logoin"){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,160/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext("2d").drawImage(im,0,0,c.width,c.height);db.logos[S.user.name]=c.toDataURL("image/png");save();render();toast("Logo actualizado")};im.onerror=()=>toast("No se pudo leer la imagen");im.src=r.result};r.readAsDataURL(f);return}if(e.target.id==="todos")document.getElementById("alis").hidden=e.target.checked});
-render();
-}
+app.innerHTML=`<div class="wrap"><div class="empty">Cargando…</div></div>`;
+onAuthStateChanged(auth,async u=>{
+  if(S.registering)return;
+  if(!u){S.user=null;db.items=[];db.me=null;db.perfil=null;render();return}
+  await startSession(u);
+});
 </script>
 </body>
 </html>
