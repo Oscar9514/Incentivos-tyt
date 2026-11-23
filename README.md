@@ -8,7 +8,7 @@ Plataforma de incentivos de marcas para aliados: metas volantes, días de marca 
 | --- | --- |
 | `index.html` | La plataforma, conectada a Firebase |
 | `firestore.rules` | Reglas de seguridad para pegar en Firestore > Reglas |
-| `presentacion.pdf` | Presentación de la plataforma |
+| `instructivo.pdf` | Instructivo de uso, se abre desde la pantalla de ingreso |
 | `.nojekyll` | Le indica a GitHub Pages que publique los archivos tal cual |
 
 ## Puesta en marcha (una sola vez)
